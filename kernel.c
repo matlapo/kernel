@@ -1,17 +1,11 @@
 #include "kernel.h"
+#include "common.h"
 
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t;
 typedef uint32_t size_t;
 
 extern char __bss[], __bss_end[], __stack_top[];
-
-void *memset(void *buf, char c, size_t n) {
-    uint8_t *p = (uint8_t *) buf;
-    while (n--)
-        *p++ = c;
-    return buf;
-}
 
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
                        long arg5, long fid, long eid) {
@@ -44,6 +38,9 @@ void kernel_main(void) {
     for (int i = 0; s[i] != '\0'; i++) {
         putchar(s[i]);
     }
+
+    printf("\n\nHello %s\n", "World!");
+    printf("1 + 2 = %d, %x\n", 1 + 2, 0x1234abcd);
 
     for (;;) {
         __asm__ __volatile__("wfi");
