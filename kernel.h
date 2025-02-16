@@ -43,6 +43,12 @@ struct trap_frame {
     uint32_t sp;
 } __attribute__((packed));
 
+#define panic(fmt, ...)                                                        \
+    do {                                                                       \
+        printf("PANIC: %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);  \
+        while (1) {}                                                           \
+    } while (0)
+
 #define READ_CSR(reg)                                                          \
     ({                                                                         \
         unsigned long __tmp;                                                   \
