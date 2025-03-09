@@ -239,7 +239,7 @@ struct process *create_process(uint32_t pc) {
     *--sp = 0;                      // s0
     *--sp = (uint32_t) pc;          // ra
 
-    // Set up the kernel's memory mapping.
+    // Allocate a page table for the kernel.
     uint32_t *page_table = (uint32_t *) alloc_pages(1);
     for (paddr_t paddr = (paddr_t) __kernel_base; paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
@@ -248,6 +248,7 @@ struct process *create_process(uint32_t pc) {
     proc->pid = i + 1;
     proc->state = PROC_RUNNABLE;
     proc->sp = (uint32_t) sp;
+    proc->page_table = page_table;
     return proc;
 }
 
@@ -268,11 +269,18 @@ void yield(void) {
     if (next == current_proc)
         return;
 
-    // Store the base address of the current process' kstack in sscratch
+    // The sfence instruction guarantees completion of pending address translation
+    // operations before continuing execution. It also flushes the TLB after we've
+    // switched page table. We also store the base address of the current process'
+    // kstack in sscratch before switching to another process.
     __asm__ __volatile__(
+        "sfence.vma\n"
+        "csrw satp, %[satp]\n"
+        "sfence.vma\n"
         "csrw sscratch, %[sscratch]\n"
         :
-        : [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+        : [satp] "r" (SATP_SV32 | ((uint32_t) next->page_table / PAGE_SIZE)),
+          [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
     );
 
     // Context switch
