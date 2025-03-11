@@ -13,6 +13,9 @@
 #define PAGE_X    (1 << 3)   // Executable
 #define PAGE_U    (1 << 4)   // User (accessible in user mode)
 
+// The base virtual address of an application image.
+#define USER_BASE 0x1000000
+
 struct process {
     int pid;               // Process ID
     int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE

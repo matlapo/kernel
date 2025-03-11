@@ -4,6 +4,7 @@
 extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 struct process procs[PROCS_MAX];
 
@@ -205,8 +206,12 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags) {
     table0[vpn0] = ((paddr >> 12) << 10) | flags | PAGE_V;
 }
 
+void user_entry(void) {
+    panic("not yet implemented");
+}
+
 // Takes an entry point as argument.
-struct process *create_process(uint32_t pc) {
+struct process *create_process(const void *image, size_t image_size) {
     // Find an unused process control structure.
     struct process *proc = NULL;
     int i;
@@ -237,12 +242,29 @@ struct process *create_process(uint32_t pc) {
     *--sp = 0;                      // s2
     *--sp = 0;                      // s1
     *--sp = 0;                      // s0
-    *--sp = (uint32_t) pc;          // ra
+    *--sp = (uint32_t) user_entry;  // ra
 
-    // Allocate a page table for the kernel.
+    // Allocate a root page table for the kernel.
     uint32_t *page_table = (uint32_t *) alloc_pages(1);
+
+    // Map the kernel's memory 1:1
     for (paddr_t paddr = (paddr_t) __kernel_base; paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
         map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+
+    // Map user pages.
+    for (uint32_t off = 0; off < image_size; off += PAGE_SIZE) {
+        paddr_t page = alloc_pages(1);
+
+        // Handle the case where the data to be copied is smaller than the page size.
+        size_t remaining = image_size - off;
+        size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+        // Copy a page of the image's bytes to the newly allocated page.
+        memcpy((void *) page, image + off, copy_size);
+
+        // Map the page (starting from USER_BASE) with user permissions.
+        map_page(page_table, USER_BASE + off, page, PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+    }
 
     // Initialize fields.
     proc->pid = i + 1;
