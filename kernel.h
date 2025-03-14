@@ -14,7 +14,11 @@
 #define PAGE_U    (1 << 4)   // User (accessible in user mode)
 
 // The base virtual address of an application image.
+// A user program needs to be assembled/linked starting from
+// this memory address.
 #define USER_BASE 0x1000000
+// Enable U-mode for the CPU.
+#define SSTATUS_SPIE (1 << 5)
 
 struct process {
     int pid;               // Process ID

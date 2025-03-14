@@ -206,8 +206,15 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags) {
     table0[vpn0] = ((paddr >> 12) << 10) | flags | PAGE_V;
 }
 
-void user_entry(void) {
-    panic("not yet implemented");
+__attribute__((naked)) void user_entry(void) {
+    __asm__ __volatile__(
+        "csrw sepc, %[sepc]        \n"
+        "csrw sstatus, %[sstatus]  \n"
+        "sret                      \n"
+        :
+        : [sepc] "r" (USER_BASE),
+          [sstatus] "r" (SSTATUS_SPIE)
+    );
 }
 
 // Takes an entry point as argument.
@@ -260,6 +267,8 @@ struct process *create_process(const void *image, size_t image_size) {
         size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
 
         // Copy a page of the image's bytes to the newly allocated page.
+        // Copying is important otherwise two processes for the same application would share
+        // the same physical pages, which would break isolation.
         memcpy((void *) page, image + off, copy_size);
 
         // Map the page (starting from USER_BASE) with user permissions.
@@ -357,12 +366,13 @@ void kernel_main(void) {
     printf("alloc_pages test: paddr0=%x\n", paddr0);
     printf("alloc_pages test: paddr1=%x\n", paddr1);
 
-    idle_proc = create_process((uint32_t) NULL);
+    idle_proc = create_process(NULL, 0);
     idle_proc->pid = 0; // idle
     current_proc = idle_proc;
 
-    proc_a = create_process((uint32_t) proc_a_entry);
-    proc_b = create_process((uint32_t) proc_b_entry);
+    // proc_a = create_process((uint32_t) proc_a_entry);
+    // proc_b = create_process((uint32_t) proc_b_entry);
+    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
 
     yield();
     panic("switched to idle process");
