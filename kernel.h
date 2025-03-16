@@ -17,15 +17,15 @@
 // A user program needs to be assembled/linked starting from
 // this memory address.
 #define USER_BASE 0x1000000
-// Enable U-mode for the CPU.
-#define SSTATUS_SPIE (1 << 5)
+
+#define SSTATUS_SPIE (1 << 5) // Enable U-mode for the CPU.
 
 struct process {
     int pid;               // Process ID
-    int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE
-    vaddr_t sp;            // Stack address
-    uint32_t *page_table;  // Kernel page table address
-    uint8_t stack[8192];   // Kernel stack
+    int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE.
+    vaddr_t sp;            // Stack pointer within the stack region.
+    uint32_t *page_table;  // Page table address, shared between kernel and user.
+    uint8_t stack[8192];   // Statically-allocated stack for the kernel.
 };
 
 struct sbiret {
@@ -33,6 +33,11 @@ struct sbiret {
     long value;
 };
 
+// When a trap occurs, all registers used by user programs must
+// be saved and restored before execution can continue. This
+// structure stores the register state on the kernel stack and
+// serves as input to the trap handler, allowing it to process
+// arguments from the user program.
 struct trap_frame {
     uint32_t ra;
     uint32_t gp;

@@ -10,9 +10,13 @@ void putchar(char ch) {
     /* TODO */
 }
 
+// Entry point for a user program.
 __attribute__((section(".text.start")))
 __attribute__((naked))
 void start(void) {
+    // A 64Kb stack is statically allocated via the
+    // user linker script. Before jumping to main,
+    // point sp to it.
     __asm__ __volatile__(
         "mv sp, %[stack_top] \n"
         "call main           \n"

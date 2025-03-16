@@ -35,11 +35,17 @@ __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
     __asm__ __volatile__(
-        // Retrieve the kernel stack of the running process from sscratch.
-        // Also save the user process' stack address in sscratch.
+        // Whenever a user program is running, sscratch holds the
+        // address of the associated kernel stack. That way, when
+        // we context switch to another process, we can easily
+        // start using the kernel stack to save all the registers
+        // before switching to another process with a different
+        // user and kernel stacks.
+        //
+        // Also save the user stack address in sscratch temporarily.
         "csrrw sp, sscratch, sp\n"
 
-        // Store all general-purpose registers on the kernel stack.
+        // Save all general-purpose registers on the kernel stack.
         "addi sp, sp, -4 * 31\n"
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
@@ -72,17 +78,18 @@ void kernel_entry(void) {
         "sw s10, 4 * 28(sp)\n"
         "sw s11, 4 * 29(sp)\n"
 
-        // Store the user's stack address on the kernel stack.
+        // Save the user stack address on the kernel stack.
         "csrr a0, sscratch\n"
         "sw a0,  4 * 30(sp)\n"
 
-        // After the exception is handled, the user process will
-        // run again. Make sure that sscratch still reflects the
-        // original kernel stack address that was stored in
-        // sscratch prior to entering kernel_entry.
+        // Once the exception is handled and the process runs
+        // again, sscratch needs to hold the same value it
+        // held prior to entering kernel_entry.
         "addi a0, sp, 4 * 31\n"
         "csrw sscratch, a0\n"
 
+        // handle_trap takes a pointer to a trap frame, which
+        // is exactly what was just stored on the kernel stack.
         "mv a0, sp\n"
         "call handle_trap\n"
 
@@ -141,6 +148,7 @@ paddr_t alloc_pages(uint32_t n) {
     return paddr;
 }
 
+// Give control of the CPU to another process BY [TODO].
 __attribute__((naked))
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
     __asm__ __volatile__(
@@ -206,7 +214,10 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags) {
     table0[vpn0] = ((paddr >> 12) << 10) | flags | PAGE_V;
 }
 
+// Switches the CPU from S-mode to U-mode.
 __attribute__((naked)) void user_entry(void) {
+    // After sret executes, the CPU will jump to the
+    // address stored in sepc.
     __asm__ __volatile__(
         "csrw sepc, %[sepc]        \n"
         "csrw sstatus, %[sstatus]  \n"
@@ -217,7 +228,10 @@ __attribute__((naked)) void user_entry(void) {
     );
 }
 
-// Takes an entry point as argument.
+// Sets up a new process if there is an empty PCB available.
+//
+// The user program needs to be given as argument and will be
+// mapped in the page table along with the kernel itself.
 struct process *create_process(const void *image, size_t image_size) {
     // Find an unused process control structure.
     struct process *proc = NULL;
@@ -232,8 +246,12 @@ struct process *create_process(const void *image, size_t image_size) {
     if (!proc)
         panic("no free process slots");
 
+    // TODO: these comments are not clear at all.
     // Stack callee-saved registers. These register values will be restored in
     // the first context switch in switch_context.
+    //
+    // When this process will get scheduled, scheduler assumes this process ran
+    // before and saved its state on the stack.
     //
     // sp here points one byte past the bottom of proc->stack.
     uint32_t *sp = (uint32_t *) &proc->stack[sizeof(proc->stack)];
@@ -251,7 +269,7 @@ struct process *create_process(const void *image, size_t image_size) {
     *--sp = 0;                      // s0
     *--sp = (uint32_t) user_entry;  // ra
 
-    // Allocate a root page table for the kernel.
+    // Allocate a root page table.
     uint32_t *page_table = (uint32_t *) alloc_pages(1);
 
     // Map the kernel's memory 1:1
@@ -301,9 +319,10 @@ void yield(void) {
         return;
 
     // The sfence instruction guarantees completion of pending address translation
-    // operations before continuing execution. It also flushes the TLB after we've
-    // switched page table. We also store the base address of the current process'
-    // kstack in sscratch before switching to another process.
+    // operations before continuing execution and flushes the TLB.
+    //
+    // Also store in sscratch the address of the bottom of the stack of the next
+    // process to run.
     __asm__ __volatile__(
         "sfence.vma\n"
         "csrw satp, %[satp]\n"
@@ -347,10 +366,10 @@ void proc_b_entry(void) {
 }
 
 void kernel_main(void) {
-    // Init the bss region with 0s
+    // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
-    // Set the exception handler
+    // Set the exception handler.
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
     const char *s = "\n\nHello World!\n";
