@@ -20,6 +20,15 @@
 
 #define SSTATUS_SPIE (1 << 5) // Enable U-mode for the CPU.
 
+/// Process Control Block (PCB).
+///
+/// Each process has a dedicated kernel stack that the kernel code
+/// uses when it takes control of the CPU. In other words, every
+/// user process has an associated kernel thread.
+///
+/// Since each PCB has its own page table mapping to the same
+/// physical memory, every kernel thread share the same physical
+/// memory.
 struct process {
     int pid;               // Process ID
     int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE.

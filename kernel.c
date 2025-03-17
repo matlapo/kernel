@@ -38,7 +38,7 @@ void kernel_entry(void) {
         // Whenever a user program is running, sscratch holds the
         // address of the associated kernel stack. That way, when
         // we context switch to another process, we can easily
-        // start using the kernel stack to save all the registers
+        // start using the kernel stack to save the registers state
         // before switching to another process with a different
         // user and kernel stacks.
         //
@@ -148,9 +148,21 @@ paddr_t alloc_pages(uint32_t n) {
     return paddr;
 }
 
-// Give control of the CPU to another process BY [TODO].
+// Transfer control of the CPU from one kernel thread to another. When
+// this function returns, it will be a different kernel thread running
+// than the one calling this function.
 __attribute__((naked))
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
+     // Unlike preemptive multitasking, where the preempted code is unaware
+     // that it is losing control of the CPU, switching between kernel threads
+     // is cooperative: it happens through a function call. When switch_context()
+     // is invoked, the kernel explicitly switches from one kernel thread to
+     // another. Since this is a function call rather than an exception, the
+     // compiler automatically ensures that caller-saved registers (as per the
+     // RISC-V calling convention) are saved on the stack beforehand. As a result,
+     // switch_context() only needs to handle callee-saved registers. Since we
+     // cannot predict which of these registers the next kernel thread will use,
+     // the only good answer is to save them all.
     __asm__ __volatile__(
         // Save callee-saved registers onto the current process's stack.
         "addi sp, sp, -13 * 4\n"
