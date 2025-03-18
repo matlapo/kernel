@@ -14,7 +14,7 @@
 #define PAGE_U    (1 << 4)   // User (accessible in user mode)
 
 // The base virtual address of an application image.
-// A user program needs to be assembled/linked starting from
+// A user program needs to be linked/relocated starting from
 // this memory address.
 #define USER_BASE 0x1000000
 
@@ -22,13 +22,28 @@
 
 /// Process Control Block (PCB).
 ///
-/// Each process has a dedicated kernel stack that the kernel code
-/// uses when it takes control of the CPU. In other words, every
-/// user process has an associated kernel thread.
+/// Each user process running is backed by a PCB.
 ///
-/// Since each PCB has its own page table mapping to the same
-/// physical memory, every kernel thread share the same physical
-/// memory.
+/// Each PCB contains a stack that the kernel code uses when
+/// it takes control of the CPU. Since the concept of a "thread"
+/// is really nothing more than a stack and a register state,
+/// this basically means that each user process has an associated
+/// kernel thread. Any exception occuring while user code is
+/// running is handled by that associated kernel thread.
+///
+/// The kernel is essentially a collection of pages containing
+/// data and instructions meant to be executed in S-mode. There
+/// is not "a" kernel, rather, there are kernel _pages_ that can
+/// be made reachable by mapping them in a page table. Any thread
+/// that can access and execute code on these pages is part of
+/// "the kernel".
+///
+/// Each PCB has its own page table. The resulting virtual address
+/// space is shared between the kernel and the user program. The
+/// kernel instructions and data are mapped using identity mapping,
+/// ensuring that kernel code runs at the same physical addresses
+/// across all processes. That means every kernel thread share the
+/// same physical memory despite each using a different page table.
 struct process {
     int pid;               // Process ID
     int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE.

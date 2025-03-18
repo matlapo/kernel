@@ -8,6 +8,9 @@ extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 struct process procs[PROCS_MAX];
 
+struct process *current_proc; // Currently running process
+struct process *idle_proc;    // Idle process
+
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
                        long arg5, long fid, long eid) {
     register long a0 __asm__("a0") = arg0;
@@ -37,15 +40,14 @@ void kernel_entry(void) {
     __asm__ __volatile__(
         // Whenever a user program is running, sscratch holds the
         // address of the associated kernel stack. That way, when
-        // we context switch to another process, we can easily
-        // start using the kernel stack to save the registers state
-        // before switching to another process with a different
-        // user and kernel stacks.
+        // a trap occurs, the kernel can easily start using its
+        // own stack to save the user's registers state and handle
+        // the trap.
         //
         // Also save the user stack address in sscratch temporarily.
         "csrrw sp, sscratch, sp\n"
 
-        // Save all general-purpose registers on the kernel stack.
+        // Save all general-purpose registers onto the kernel stack.
         "addi sp, sp, -4 * 31\n"
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
@@ -82,9 +84,9 @@ void kernel_entry(void) {
         "csrr a0, sscratch\n"
         "sw a0,  4 * 30(sp)\n"
 
-        // Once the exception is handled and the process runs
-        // again, sscratch needs to hold the same value it
-        // held prior to entering kernel_entry.
+        // Once the exception is handled and the user code
+        // runs again, sscratch needs to hold the same value
+        // it held prior to entering the kernel.
         "addi a0, sp, 4 * 31\n"
         "csrw sscratch, a0\n"
 
@@ -149,8 +151,8 @@ paddr_t alloc_pages(uint32_t n) {
 }
 
 // Transfer control of the CPU from one kernel thread to another. When
-// this function returns, it will be a different kernel thread running
-// than the one calling this function.
+// this function returns, it will be a different kernel thread than
+// the one calling it.
 __attribute__((naked))
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
      // Unlike preemptive multitasking, where the preempted code is unaware
@@ -204,7 +206,7 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
 }
 
 // Creates a mapping between a virtual and physical page. The physical page must
-// have been allocated prior to this call.
+// be allocated outside of this function.
 void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags) {
     if (!is_aligned(vaddr, PAGE_SIZE))
         panic("unaligned vaddr %x", vaddr);
@@ -240,10 +242,14 @@ __attribute__((naked)) void user_entry(void) {
     );
 }
 
-// Sets up a new process if there is an empty PCB available.
+// Sets up a new process.
 //
-// The user program needs to be given as argument and will be
-// mapped in the page table along with the kernel itself.
+// Takes as input a pointer to the user binary and maps its pages
+// starting from the hardcoded virtual address USER_BASE. It is
+// assumed that the program was linked (i.e. relocated) accordingly
+// and that its first byte corresponds to the entry point of the binary.
+//
+// Panics if there is no free PCB available.
 struct process *create_process(const void *image, size_t image_size) {
     // Find an unused process control structure.
     struct process *proc = NULL;
@@ -258,14 +264,14 @@ struct process *create_process(const void *image, size_t image_size) {
     if (!proc)
         panic("no free process slots");
 
-    // TODO: these comments are not clear at all.
-    // Stack callee-saved registers. These register values will be restored in
-    // the first context switch in switch_context.
+    // When a kernel thread resumes execution, it is expected that
+    // its previous register state was stored on its stack. Since
+    // this kernel thread never ran before, each register should
+    // be initialized to zero.
     //
-    // When this process will get scheduled, scheduler assumes this process ran
-    // before and saved its state on the stack.
-    //
-    // sp here points one byte past the bottom of proc->stack.
+    // As per the RISC-V calling convention, ra stores the return
+    // address. Here, user_entry is used so that the CPU can be
+    // set to U-mode and start executing the user program.
     uint32_t *sp = (uint32_t *) &proc->stack[sizeof(proc->stack)];
     *--sp = 0;                      // s11
     *--sp = 0;                      // s10
@@ -313,9 +319,6 @@ struct process *create_process(const void *image, size_t image_size) {
     return proc;
 }
 
-struct process *current_proc; // Currently running process
-struct process *idle_proc;    // Idle process
-
 void yield(void) {
     // Search for a runnable process
     struct process *next = idle_proc;
@@ -345,7 +348,7 @@ void yield(void) {
           [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
     );
 
-    // Context switch
+    // Switch PCB
     struct process *prev = current_proc;
     current_proc = next;
     switch_context(&prev->sp, &next->sp);
