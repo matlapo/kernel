@@ -20,6 +20,8 @@
 
 #define SSTATUS_SPIE (1 << 5) // Enable U-mode for the CPU.
 
+#define SCAUSE_ECALL 8 // sscause value for the ecall instruction.
+
 /// Process Control Block (PCB).
 ///
 /// Each user process running is backed by a PCB.
