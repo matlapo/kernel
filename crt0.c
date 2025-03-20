@@ -6,6 +6,8 @@ __attribute__((noreturn)) void exit(void) {
     for (;;);
 }
 
+// On RISC-V, system calls are generated via the ecall
+// instruction.
 int syscall(int sysno, int arg0, int arg1, int arg2) {
     register int a0 __asm__("a0") = arg0;
     register int a1 __asm__("a1") = arg1;
@@ -22,6 +24,10 @@ int syscall(int sysno, int arg0, int arg1, int arg2) {
 
 void putchar(char ch) {
     syscall(SYS_PUTCHAR, ch, 0, 0);
+}
+
+int getchar(void) {
+    return syscall(SYS_GETCHAR, 0, 0, 0);
 }
 
 // Entry point for a user program.
