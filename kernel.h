@@ -22,6 +22,8 @@
 
 #define SCAUSE_ECALL 8 // sscause value for the ecall instruction.
 
+#define PROC_EXITED   2
+
 /// Process Control Block (PCB).
 ///
 /// Each user process running is backed by a PCB.

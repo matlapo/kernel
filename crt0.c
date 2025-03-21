@@ -2,10 +2,6 @@
 
 extern char __stack_top[];
 
-__attribute__((noreturn)) void exit(void) {
-    for (;;);
-}
-
 // On RISC-V, system calls are generated via the ecall
 // instruction.
 int syscall(int sysno, int arg0, int arg1, int arg2) {
@@ -28,6 +24,11 @@ void putchar(char ch) {
 
 int getchar(void) {
     return syscall(SYS_GETCHAR, 0, 0, 0);
+}
+
+__attribute__((noreturn)) void exit(void) {
+    syscall(SYS_EXIT, 0, 0, 0);
+    for (;;); // Just in case.
 }
 
 // Entry point for a user program.

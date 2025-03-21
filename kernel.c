@@ -155,6 +155,12 @@ void handle_syscall(struct trap_frame *f) {
                 yield();
             }
             break;
+        case SYS_EXIT:
+            // TODO: free up memory.
+            printf("process %d exited\n", current_proc->pid);
+            current_proc->state = PROC_EXITED;
+            yield();
+            panic("unreachable");
         default:
             panic("unexpected syscall a3=%x\n", f->a3);
     }
