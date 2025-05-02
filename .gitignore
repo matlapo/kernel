@@ -1,10 +1,7 @@
-/disk/*
-!/disk/.gitkeep
 *.map
-*.tar
 *.o
 *.elf
 *.bin
-*.log
-*.pcap
-ELFkickers
+!experiments/*.o
+!experiments/*.so
+!experiments/*.elf
