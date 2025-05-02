@@ -4,7 +4,6 @@
 extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
-extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 struct process procs[PROCS_MAX];
 
@@ -431,6 +430,8 @@ void kernel_main(void) {
     // Set the exception handler.
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
+    __asm__ __volatile__("addi x19, x0, 0x2");
+
     const char *s = "\n\nHello World!\n";
     for (int i = 0; s[i] != '\0'; i++) {
         putchar(s[i]);
@@ -450,7 +451,7 @@ void kernel_main(void) {
 
     // proc_a = create_process((uint32_t) proc_a_entry);
     // proc_b = create_process((uint32_t) proc_b_entry);
-    create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
+    // create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
 
     yield();
     panic("switched to idle process");
