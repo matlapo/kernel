@@ -56,11 +56,6 @@ struct process {
     uint8_t stack[8192];   // Statically-allocated stack for the kernel.
 };
 
-struct sbiret {
-    long error;
-    long value;
-};
-
 // When a trap occurs, all registers used by user programs must
 // be saved and restored before execution can continue. This
 // structure stores the register state on the kernel stack and
@@ -102,7 +97,7 @@ struct trap_frame {
 
 #define panic(fmt, ...)                                                        \
     do {                                                                       \
-        printf("PANIC: %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);  \
+        /* printf("PANIC: %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); */  \
         while (1) {}                                                           \
     } while (0)
 

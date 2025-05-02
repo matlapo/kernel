@@ -13,35 +13,6 @@ struct process *idle_proc;    // Idle process
 // Prototypes
 void yield(void);
 
-struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4,
-                       long arg5, long fid, long eid) {
-    register long a0 __asm__("a0") = arg0;
-    register long a1 __asm__("a1") = arg1;
-    register long a2 __asm__("a2") = arg2;
-    register long a3 __asm__("a3") = arg3;
-    register long a4 __asm__("a4") = arg4;
-    register long a5 __asm__("a5") = arg5;
-    register long a6 __asm__("a6") = fid;
-    register long a7 __asm__("a7") = eid;
-
-    __asm__ __volatile__("ecall"
-                         : "=r"(a0), "=r"(a1)
-                         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),
-                           "r"(a6), "r"(a7)
-                         : "memory");
-    return (struct sbiret){.error = a0, .value = a1};
-}
-
-void putchar(char ch) {
-    sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
-}
-
-long getchar(void) {
-    // Read a character from the serial port.
-    struct sbiret ret = sbi_call(0, 0, 0, 0, 0, 0, 0, 2);
-    return ret.error;
-}
-
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
@@ -141,11 +112,12 @@ void kernel_entry(void) {
 void handle_syscall(struct trap_frame *f) {
     switch (f->a3) {
         case SYS_PUTCHAR:
-            putchar(f->a0);
+            panic("unimplemented");
             break;
         case SYS_GETCHAR:
             while (1) {
-                long ch = getchar();
+                panic("unimplemented");
+                char ch = 0;
                 if (ch >= 0) {
                     f->a0 = ch;
                     break;
@@ -156,7 +128,7 @@ void handle_syscall(struct trap_frame *f) {
             break;
         case SYS_EXIT:
             // TODO: free up memory.
-            printf("process %d exited\n", current_proc->pid);
+            // printf("process %d exited\n", current_proc->pid);
             current_proc->state = PROC_EXITED;
             yield();
             panic("unreachable");
@@ -397,32 +369,6 @@ void yield(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
-void delay(void) {
-    for (int i = 0; i < 30000000; i++)
-        __asm__ __volatile__("nop"); // do nothing
-}
-
-struct process *proc_a;
-struct process *proc_b;
-
-void proc_a_entry(void) {
-    printf("starting process A\n");
-    while (1) {
-        putchar('A');
-        delay();
-        yield();
-    }
-}
-
-void proc_b_entry(void) {
-    printf("starting process B\n");
-    while (1) {
-        putchar('B');
-        delay();
-        yield();
-    }
-}
-
 void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
@@ -431,33 +377,6 @@ void kernel_main(void) {
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
     __asm__ __volatile__("addi x19, x0, 0x2");
-
-    const char *s = "\n\nHello World!\n";
-    for (int i = 0; s[i] != '\0'; i++) {
-        putchar(s[i]);
-    }
-
-    printf("\n\nHello %s\n", "World!");
-    printf("1 + 2 = %d, %x\n", 1 + 2, 0x1234abcd);
-
-    paddr_t paddr0 = alloc_pages(2);
-    paddr_t paddr1 = alloc_pages(1);
-    printf("alloc_pages test: paddr0=%x\n", paddr0);
-    printf("alloc_pages test: paddr1=%x\n", paddr1);
-
-    idle_proc = create_process(NULL, 0);
-    idle_proc->pid = 0; // idle
-    current_proc = idle_proc;
-
-    // proc_a = create_process((uint32_t) proc_a_entry);
-    // proc_b = create_process((uint32_t) proc_b_entry);
-    // create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
-
-    yield();
-    panic("switched to idle process");
-
-    // Trigger an illegal instruction exception
-    __asm__ __volatile__("unimp");
 
     for (;;) {
         __asm__ __volatile__("wfi");
@@ -471,6 +390,6 @@ void boot(void) {
         "mv sp, %[stack_top]\n" // Set the stack pointer
         "j kernel_main\n"       // Jump to the kernel main function
         :
-        : [stack_top] "r" (__stack_top) // Pass the stack top address as %[stack_top]
+        : [stack_top] "r" (__stack_top)
     );
 }
