@@ -25,7 +25,7 @@
 struct process {
     int pid;               // Process ID
     int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE.
-    vaddr_t sp;            // Stack pointer within the stack region.
+    paddr_t sp;            // Stack pointer within the stack region.
     uint8_t stack[8192];   // Statically-allocated stack for the kernel.
 };
 

@@ -10,10 +10,8 @@ struct process procs[PROCS_MAX];
 struct process *current_proc; // Currently running process
 struct process *idle_proc;    // Idle process
 
-// Prototypes
 void sched(void);
 
-// TODO: adapt to M-mode.
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
@@ -111,41 +109,13 @@ void kernel_entry(void) {
     );
 }
 
-void handle_syscall(struct trap_frame *f) {
-    switch (f->a3) {
-        case SYS_PUTCHAR:
-            panic("unimplemented");
-            break;
-        case SYS_GETCHAR:
-            while (1) {
-                panic("unimplemented");
-                char ch = 0;
-                if (ch >= 0) {
-                    f->a0 = ch;
-                    break;
-                }
-
-                sched();
-            }
-            break;
-        case SYS_EXIT:
-            // TODO: free up memory.
-            // printf("process %d exited\n", current_proc->pid);
-            current_proc->state = PROC_EXITED;
-            sched();
-            panic("unreachable");
-        default:
-            panic("unexpected syscall a3=%x\n", f->a3);
-    }
-}
-
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
     // TODO: this is wrong, read user pc.
     uint32_t mepc = READ_CSR(mepc);
 
     if (mcause == MCAUSE_ECALL) {
-        handle_syscall(f);
+        // TODO: handle syscall.
         // sepc points to the instruction that caused the exception.
         mepc += 4;
     } else {
@@ -230,7 +200,7 @@ __attribute__((naked)) void user_entry(void) {
     __asm__ __volatile__(
         "csrw mepc, %[mepc]        \n"
         "csrw mstatus, %[mstatus]  \n"
-        "sret                      \n"
+        "mret                      \n"
         :
         : [mepc] "r" (USER_BASE),
           [mstatus] "r" (MSTATUS_MPIE)
@@ -271,6 +241,13 @@ void kernel_main(void) {
 
     // Set the exception handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
+
+    idle_proc = &procs[0];
+    paddr_t sp = (paddr_t) &idle_proc->stack[sizeof(idle_proc->stack)];
+    idle_proc->pid = 0;
+    idle_proc->state = PROC_RUNNABLE;
+    idle_proc->sp = sp;
+    // TODO: store 0s on its stack.
 
     __asm__ __volatile__("addi x19, x0, 0x2");
 
