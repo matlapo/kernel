@@ -33,3 +33,19 @@ int strcmp(const char *s1, const char *s2) {
 
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
+
+// Taken from https://github.com/gcc-mirror/gcc/blob/master/libgcc/config/epiphany/mulsi3.c
+// TODO: panic if overflow
+unsigned int __mulsi3(unsigned int a, unsigned int b)
+{
+    unsigned int r = 0;
+    while (a)
+    {
+        if (a & 1)
+            r += b;
+        a >>= 1;
+        b <<= 1;
+    }
+    return r;
+}
+

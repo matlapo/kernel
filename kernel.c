@@ -11,20 +11,21 @@ struct process *current_proc; // Currently running process
 struct process *idle_proc;    // Idle process
 
 // Prototypes
-void yield(void);
+void sched(void);
 
+// TODO: adapt to M-mode.
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
     __asm__ __volatile__(
-        // Whenever a user program is running, sscratch holds the
+        // Whenever a user program is running, mscratch holds the
         // address of the associated kernel stack. That way, when
         // a trap occurs, the kernel can easily start using its
         // own stack to save the user's registers state and handle
         // the trap.
         //
-        // Also save the user stack address in sscratch temporarily.
-        "csrrw sp, sscratch, sp\n"
+        // Also save the user stack address in mscratch temporarily.
+        "csrrw sp, mscratch, sp\n"
 
         // Save all general-purpose registers onto the kernel stack.
         "addi sp, sp, -4 * 31\n"
@@ -60,14 +61,14 @@ void kernel_entry(void) {
         "sw s11, 4 * 29(sp)\n"
 
         // Save the user stack address on the kernel stack.
-        "csrr a0, sscratch\n"
+        "csrr a0, mscratch\n"
         "sw a0,  4 * 30(sp)\n"
 
         // Once the exception is handled and the user code
-        // runs again, sscratch needs to hold the same value
+        // runs again, mscratch needs to hold the same value
         // it held prior to entering the kernel.
         "addi a0, sp, 4 * 31\n"
-        "csrw sscratch, a0\n"
+        "csrw mscratch, a0\n"
 
         // handle_trap takes a pointer to a trap frame, which
         // is exactly what was just stored on the kernel stack.
@@ -105,7 +106,8 @@ void kernel_entry(void) {
         "lw s10, 4 * 28(sp)\n"
         "lw s11, 4 * 29(sp)\n"
         "lw sp,  4 * 30(sp)\n"
-        "sret\n"
+
+        "mret\n"
     );
 }
 
@@ -123,14 +125,14 @@ void handle_syscall(struct trap_frame *f) {
                     break;
                 }
 
-                yield();
+                sched();
             }
             break;
         case SYS_EXIT:
             // TODO: free up memory.
             // printf("process %d exited\n", current_proc->pid);
             current_proc->state = PROC_EXITED;
-            yield();
+            sched();
             panic("unreachable");
         default:
             panic("unexpected syscall a3=%x\n", f->a3);
@@ -138,19 +140,19 @@ void handle_syscall(struct trap_frame *f) {
 }
 
 void handle_trap(struct trap_frame *f) {
-    uint32_t scause = READ_CSR(scause);
-    uint32_t stval = READ_CSR(stval);
-    uint32_t user_pc = READ_CSR(sepc);
+    uint32_t mcause = READ_CSR(mcause);
+    // TODO: this is wrong, read user pc.
+    uint32_t mepc = READ_CSR(mepc);
 
-    if (scause == SCAUSE_ECALL) {
+    if (mcause == MCAUSE_ECALL) {
         handle_syscall(f);
         // sepc points to the instruction that caused the exception.
-        user_pc += 4;
+        mepc += 4;
     } else {
-        panic("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
+        panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
     }
 
-    WRITE_CSR(sepc, user_pc);
+    WRITE_CSR(mepc, mepc);
 }
 
 paddr_t alloc_pages(uint32_t n) {
@@ -220,121 +222,22 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
     );
 }
 
-// Creates a mapping between a virtual and physical page. The physical page must
-// be allocated outside of this function.
-void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags) {
-    if (!is_aligned(vaddr, PAGE_SIZE))
-        panic("unaligned vaddr %x", vaddr);
-
-    if (!is_aligned(paddr, PAGE_SIZE))
-        panic("unaligned paddr %x", paddr);
-
-    uint32_t vpn1 = (vaddr >> 22) & 0x3ff;
-    if ((table1[vpn1] & PAGE_V) == 0) {
-        // Create the non-existent 2nd level page table.
-        uint32_t pt_paddr = alloc_pages(1);
-        // Extract the PPN from the physical address.
-        table1[vpn1] = ((pt_paddr >> 12) << 10) | PAGE_V;
-    }
-
-    // Set the 2nd level page table entry to map the physical page.
-    uint32_t vpn0 = (vaddr >> 12) & 0x3ff;
-    uint32_t *table0 = (uint32_t *) ((table1[vpn1] >> 10) << 12);
-    table0[vpn0] = ((paddr >> 12) << 10) | flags | PAGE_V;
-}
-
-// Switches the CPU from S-mode to U-mode.
+// Switches the CPU from M-mode to U-mode.
+// TODO: verify that this works.
 __attribute__((naked)) void user_entry(void) {
-    // After sret executes, the CPU will jump to the
-    // address stored in sepc.
+    // After mret executes, the CPU will jump to the
+    // address stored in mepc.
     __asm__ __volatile__(
-        "csrw sepc, %[sepc]        \n"
-        "csrw sstatus, %[sstatus]  \n"
+        "csrw mepc, %[mepc]        \n"
+        "csrw mstatus, %[mstatus]  \n"
         "sret                      \n"
         :
-        : [sepc] "r" (USER_BASE),
-          [sstatus] "r" (SSTATUS_SPIE)
+        : [mepc] "r" (USER_BASE),
+          [mstatus] "r" (MSTATUS_MPIE)
     );
 }
 
-// Sets up a new process.
-//
-// Takes as input a pointer to the user binary and maps its pages
-// starting from the hardcoded virtual address USER_BASE. It is
-// assumed that the program was linked (i.e. relocated) accordingly
-// and that its first byte corresponds to the entry point of the binary.
-//
-// Panics if there is no free PCB available.
-struct process *create_process(const void *image, size_t image_size) {
-    // Find an unused process control structure.
-    struct process *proc = NULL;
-    int i;
-    for (i = 0; i < PROCS_MAX; i++) {
-        if (procs[i].state == PROC_UNUSED) {
-            proc = &procs[i];
-            break;
-        }
-    }
-
-    if (!proc)
-        panic("no free process slots");
-
-    // When a kernel thread resumes execution, it is expected that
-    // its previous register state was stored on its stack. Since
-    // this kernel thread never ran before, each register should
-    // be initialized to zero.
-    //
-    // As per the RISC-V calling convention, ra stores the return
-    // address. Here, user_entry is used so that the CPU can be
-    // set to U-mode and start executing the user program.
-    uint32_t *sp = (uint32_t *) &proc->stack[sizeof(proc->stack)];
-    *--sp = 0;                      // s11
-    *--sp = 0;                      // s10
-    *--sp = 0;                      // s9
-    *--sp = 0;                      // s8
-    *--sp = 0;                      // s7
-    *--sp = 0;                      // s6
-    *--sp = 0;                      // s5
-    *--sp = 0;                      // s4
-    *--sp = 0;                      // s3
-    *--sp = 0;                      // s2
-    *--sp = 0;                      // s1
-    *--sp = 0;                      // s0
-    *--sp = (uint32_t) user_entry;  // ra
-
-    // Allocate a root page table.
-    uint32_t *page_table = (uint32_t *) alloc_pages(1);
-
-    // Map the kernel's memory 1:1
-    for (paddr_t paddr = (paddr_t) __kernel_base; paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
-        map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
-
-    // Map user pages.
-    for (uint32_t off = 0; off < image_size; off += PAGE_SIZE) {
-        paddr_t page = alloc_pages(1);
-
-        // Handle the case where the data to be copied is smaller than the page size.
-        size_t remaining = image_size - off;
-        size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
-
-        // Copy a page of the image's bytes to the newly allocated page.
-        // Copying is important otherwise two processes for the same application would share
-        // the same physical pages, which would break isolation.
-        memcpy((void *) page, image + off, copy_size);
-
-        // Map the page (starting from USER_BASE) with user permissions.
-        map_page(page_table, USER_BASE + off, page, PAGE_U | PAGE_R | PAGE_W | PAGE_X);
-    }
-
-    // Initialize fields.
-    proc->pid = i + 1;
-    proc->state = PROC_RUNNABLE;
-    proc->sp = (uint32_t) sp;
-    proc->page_table = page_table;
-    return proc;
-}
-
-void yield(void) {
+void sched(void) {
     // Search for a runnable process
     struct process *next = idle_proc;
     for (int i = 0; i < PROCS_MAX; i++) {
@@ -348,19 +251,12 @@ void yield(void) {
     if (next == current_proc)
         return;
 
-    // The sfence instruction guarantees completion of pending address translation
-    // operations before continuing execution and flushes the TLB.
-    //
-    // Also store in sscratch the address of the bottom of the stack of the next
+    // Store in mscratch the address of the bottom of the stack of the next
     // process to run.
     __asm__ __volatile__(
-        "sfence.vma\n"
-        "csrw satp, %[satp]\n"
-        "sfence.vma\n"
-        "csrw sscratch, %[sscratch]\n"
+        "csrw mscratch, %[mscratch]\n"
         :
-        : [satp] "r" (SATP_SV32 | ((uint32_t) next->page_table / PAGE_SIZE)),
-          [sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
+        : [mscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
     );
 
     // Switch PCB
@@ -374,7 +270,7 @@ void kernel_main(void) {
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
     // Set the exception handler.
-    WRITE_CSR(stvec, (uint32_t) kernel_entry);
+    WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
     __asm__ __volatile__("addi x19, x0, 0x2");
 
