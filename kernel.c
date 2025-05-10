@@ -188,13 +188,14 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
         "lw s10, 11 * 4(sp)\n"
         "lw s11, 12 * 4(sp)\n"
         "addi sp, sp, 13 * 4\n"
+
         "ret\n"
     );
 }
 
 // Switches the CPU from M-mode to U-mode.
-// TODO: verify that this works.
-__attribute__((naked)) void user_entry(void) {
+__attribute__((naked))
+void user_entry(void) {
     // After mret executes, the CPU will jump to the
     // address stored in mepc.
     __asm__ __volatile__(
@@ -212,14 +213,14 @@ void sched(void) {
     struct process *next = idle_proc;
     for (int i = 0; i < PROCS_MAX; i++) {
         struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
-        if (proc->state == PROC_RUNNABLE && proc->pid > 0) {
+        if (proc->state == PROC_RUNNABLE) {
             next = proc;
             break;
         }
     }
 
-    if (next == current_proc)
-        return;
+    // if (next == current_proc)
+    //    return;
 
     // Store in mscratch the address of the bottom of the stack of the next
     // process to run.
@@ -235,6 +236,14 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
+void idle(void) {
+    __asm__ __volatile__("addi x17, x0, 0x2");
+
+    for (;;) {
+        __asm__ __volatile__("wfi");
+    }
+}
+
 void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
@@ -242,12 +251,32 @@ void kernel_main(void) {
     // Set the exception handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
-    idle_proc = &procs[0];
-    paddr_t sp = (paddr_t) &idle_proc->stack[sizeof(idle_proc->stack)];
-    idle_proc->pid = 0;
-    idle_proc->state = PROC_RUNNABLE;
-    idle_proc->sp = sp;
-    // TODO: store 0s on its stack.
+    struct process *kernel_proc = &procs[0];
+    paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
+    kernel_proc->pid = 0;
+    kernel_proc->state = PROC_RUNNABLE;
+    kernel_proc->sp = (paddr_t) sp;
+
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = (uint32_t) idle;
+
+    current_proc = &procs[0];
+    sched();
+
+    // TODO: I think procs[0] should be a kernel process only.
+    // and we should have a init function for it. We should also
+    // init the idle process that simply loops over wfi instructions.
 
     __asm__ __volatile__("addi x19, x0, 0x2");
 
