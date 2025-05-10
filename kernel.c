@@ -142,16 +142,16 @@ paddr_t alloc_pages(uint32_t n) {
 // the one calling it.
 __attribute__((naked))
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
-     // Unlike preemptive multitasking, where the preempted code is unaware
-     // that it is losing control of the CPU, switching between kernel threads
-     // is cooperative: it happens through a function call. When switch_context()
-     // is invoked, the kernel explicitly switches from one kernel thread to
-     // another. Since this is a function call rather than an exception, the
-     // compiler automatically ensures that caller-saved registers (as per the
-     // RISC-V calling convention) are saved on the stack beforehand. As a result,
-     // switch_context() only needs to handle callee-saved registers. Since we
-     // cannot predict which of these registers the next kernel thread will use,
-     // the only good answer is to save them all.
+     // Just like preemptive multitasking, every register needs to be saved somewhere
+     // before switching to a different stack. But unlike preemptive multitasking,
+     // where the preempted code is unaware that it is losing control of the CPU,
+     // switching between kernel threads is cooperative: it happens through a
+     // function call. When switch_context() is invoked, the kernel explicitly
+     // switches from one kernel thread to another. Since this is a function call
+     // rather than an exception, the compiler helps us by automatically saving the
+     // caller-saved registers (as per the RISC-V calling convention) on the caller's
+     // stack before entering the function. As a result, switch_context() only needs
+     // to handle callee-saved registers.
     __asm__ __volatile__(
         // Save callee-saved registers onto the current process's stack.
         "addi sp, sp, -13 * 4\n"
