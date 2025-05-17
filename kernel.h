@@ -10,6 +10,7 @@
 #define USER_BASE 0x1000000   // load address of an user program.
 #define MSTATUS_MPIE (1 << 7) // saved value of mstatus.MIE during an interrupt.
 #define MCAUSE_ECALL 8        // mcause value for the ecall instruction from U-mode.
+#define MCAUSE_TIMER 7        // mcause value for a timer interrupt.
 #define PROC_EXITED  2
 
 /// Process Control Block (PCB).

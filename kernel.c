@@ -111,17 +111,24 @@ void kernel_entry(void) {
 
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
-    // TODO: this is wrong, read user pc.
-    uint32_t mepc = READ_CSR(mepc);
 
-    if (mcause == MCAUSE_ECALL) {
-        // TODO: handle syscall.
-        // sepc points to the instruction that caused the exception.
-        mepc += 4;
+    if (mcause & (1 << 31) == 1) {
+        if (mcause & 0x7fffffff == 7) {
+           // TODO: handle timer interrupt.
+        }
     } else {
-        panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
+        // uint32_t uepc = READ_CSR(uepc);
+        if (mcause == MCAUSE_ECALL) {
+            // TODO: handle syscall.
+            // sepc points to the instruction that caused the exception.
+            mepc += 4;
+        } else {
+            panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
+        }
     }
 
+    // TODO: prologue and epilogue should be the same regardless of the
+    // exception kind.
     WRITE_CSR(mepc, mepc);
 }
 
