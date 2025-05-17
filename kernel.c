@@ -219,11 +219,11 @@ void sched(void) {
         }
     }
 
-    // if (next == current_proc)
-    //    return;
+    if (next == current_proc)
+        return;
 
-    // Store in mscratch the address of the bottom of the stack of the next
-    // process to run.
+    // Exception handlers expect mscratch to hold the kernel stack address of
+    // the currently running process.
     __asm__ __volatile__(
         "csrw mscratch, %[mscratch]\n"
         :
@@ -272,11 +272,9 @@ void kernel_main(void) {
     *--sp = (uint32_t) idle;
 
     current_proc = &procs[0];
-    sched();
 
-    // TODO: I think procs[0] should be a kernel process only.
-    // and we should have a init function for it. We should also
-    // init the idle process that simply loops over wfi instructions.
+    // Jump to idle for now, no timer interrupts so you'll be stuck there.
+    idle();
 
     __asm__ __volatile__("addi x19, x0, 0x2");
 
