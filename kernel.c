@@ -112,24 +112,24 @@ void kernel_entry(void) {
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
 
-    if (mcause & (1 << 31) == 1) {
-        if (mcause & 0x7fffffff == 7) {
-           // TODO: handle timer interrupt.
-        }
-    } else {
-        // uint32_t uepc = READ_CSR(uepc);
-        if (mcause == MCAUSE_ECALL) {
-            // TODO: handle syscall.
-            // sepc points to the instruction that caused the exception.
-            mepc += 4;
-        } else {
-            panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
-        }
-    }
+//    if (mcause & (1 << 31) == 1) {
+//        if (mcause & 0x7fffffff == 7) {
+//           // TODO: handle timer interrupt.
+//        }
+//    } else {
+//        // uint32_t uepc = READ_CSR(uepc);
+//        if (mcause == MCAUSE_ECALL) {
+//            // TODO: handle syscall.
+//            // sepc points to the instruction that caused the exception.
+//            mepc += 4;
+//        } else {
+//            panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
+//        }
+//    }
 
     // TODO: prologue and epilogue should be the same regardless of the
     // exception kind.
-    WRITE_CSR(mepc, mepc);
+//    WRITE_CSR(mepc, mepc);
 }
 
 paddr_t alloc_pages(uint32_t n) {
@@ -243,8 +243,15 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
+static inline uint64_t r_mtimecmp()
+{
+    return *(volatile uint64_t *)0x0204000;
+}
+
 void idle(void) {
     __asm__ __volatile__("addi x17, x0, 0x2");
+
+    uint64_t x = r_mtimecmp();
 
     for (;;) {
         __asm__ __volatile__("wfi");
