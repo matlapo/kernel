@@ -5,6 +5,8 @@ extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
 
+extern void uart_putc(uint8_t c);
+
 struct process procs[PROCS_MAX];
 
 struct process *current_proc; // Currently running process
@@ -286,6 +288,13 @@ void kernel_main(void) {
     *--sp = (uint32_t) idle;
 
     current_proc = &procs[0];
+
+    uart_putc('H');
+    uart_putc('e');
+    uart_putc('l');
+    uart_putc('l');
+    uart_putc('o');
+    uart_putc('\n');
 
     // Jump to idle for now, no timer interrupts so you'll be stuck there.
     idle();

@@ -6,12 +6,11 @@
 #define RHR 0x00
 #define THR 0x00
 #define IER 0x01
-#define IIR 0x02
 #define FCR 0x02
 #define LCR 0x03
 #define LSR 0x05
 
-#define LSR_DATA_READY  (1 << 0)
+#define LSR_RX_READY    (1 << 0)
 #define LSR_TX_IDLE     (1 << 5)
 
 #define REG(offset) (*(volatile uint8_t *)(UART_BASE + offset))
@@ -34,15 +33,16 @@ void uart_init(void) {
     // Enable FIFOs and clear both.
     REG(FCR) = 0x07;
 
-    // Enable interrupts for data available in RHR and when
-    // THR is empty (ready for transmission).
+    // Enable interrupts for when
+    // (1) Data is available in RHR.
+    // (2) THR is ready to accept a char.
     REG(IER) = 0x03;
 }
 
-uint8_t uart_getc(void) {
-  if(REG(LSR) & 0x01){
-    return REG(RHR);
-  } else {
-    return -1;
-  }
+void uart_putc(uint8_t c) {
+    // Poll until THR is ready.
+    while ((REG(LSR) & LSR_TX_IDLE) == 0)
+        ;
+
+    REG(THR) = c;
 }
