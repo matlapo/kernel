@@ -289,13 +289,6 @@ void kernel_main(void) {
 
     current_proc = &procs[0];
 
-    uart_putc('H');
-    uart_putc('e');
-    uart_putc('l');
-    uart_putc('l');
-    uart_putc('o');
-    uart_putc('\n');
-
     // Jump to idle for now, no timer interrupts so you'll be stuck there.
     idle();
 
