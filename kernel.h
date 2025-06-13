@@ -7,8 +7,10 @@
 #define PROC_UNUSED   0       // Unused process control structure
 #define PROC_RUNNABLE 1       // Runnable process
 
-#define USER_BASE 0x1000000   // load address of an user program.
-#define MSTATUS_MPIE (1 << 7) // saved value of mstatus.MIE during an interrupt.
+#define USER_BASE 0x1000000   // Load address of a user program.
+#define MSTATUS_MIE (1 << 3)  // Interrupts enabled.
+#define MIE_TIMER (1 << 7)    // Timer interrupts enabled.
+#define MSTATUS_MPIE (1 << 7) // Saved value of mstatus.MIE during an interrupt.
 #define MCAUSE_ECALL 8        // mcause value for the ecall instruction from U-mode.
 #define MCAUSE_TIMER 7        // mcause value for a timer interrupt.
 #define PROC_EXITED  2
@@ -77,7 +79,7 @@ struct trap_frame {
 
 #define READ_CSR(reg)                                                          \
     ({                                                                         \
-        unsigned long __tmp;                                                   \
+        uint32_t __tmp;                                                        \
         __asm__ __volatile__("csrr %0, " #reg : "=r"(__tmp));                  \
         __tmp;                                                                 \
     })
@@ -87,3 +89,4 @@ struct trap_frame {
         uint32_t __tmp = (value);                                              \
         __asm__ __volatile__("csrw " #reg ", %0" ::"r"(__tmp));                \
     } while (0)
+

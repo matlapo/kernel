@@ -114,6 +114,15 @@ void kernel_entry(void) {
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
 
+    printf("Trap\n");
+
+    if (mcause & (1 << 31) == 1) {
+        printf("Interrupt\n");
+    } else {
+        printf("Synchronous exception\n");
+        printf("mcause is %x\n", mcause);
+    }
+
 //    if (mcause & (1 << 31) == 1) {
 //        if (mcause & 0x7fffffff == 7) {
 //           // TODO: handle timer interrupt.
@@ -129,8 +138,8 @@ void handle_trap(struct trap_frame *f) {
 //        }
 //    }
 
-    // TODO: prologue and epilogue should be the same regardless of the
-    // exception kind.
+// TODO: prologue and epilogue should be the same regardless of the
+// exception kind.
 //    WRITE_CSR(mepc, mepc);
 }
 
@@ -247,17 +256,43 @@ void sched(void) {
 
 static inline uint64_t r_mtimecmp()
 {
-    return *(volatile uint64_t *)0x0204000;
+    return *(volatile uint64_t *)0x02000000;
+}
+
+static inline void w_mtimecmp(uint64_t mtimecmp)
+{
+    *(volatile uint64_t *)0x2000000 = mtimecmp;
+}
+
+// TODO: not safe! This value is incremented by hardware
+// and the compiler generates two 32-bit load instructions
+// which won't be atomic. Although, not sure what one would
+// do here, maybe it's fine.
+static inline uint64_t r_mtime()
+{
+    return *(volatile uint64_t *)0x02007ff8;
 }
 
 void idle(void) {
-    __asm__ __volatile__("addi x17, x0, 0x2");
+    printf("Hello\n");
 
-    uint64_t x = r_mtimecmp();
+    uint64_t mtimecmp = r_mtimecmp();
+    printf("mtimecmp is %x\n", mtimecmp);
+
+    uint64_t mtime = r_mtime();
+    printf("mtime is %x\n", mtime);
+
+    mtimecmp += 1000;
+    w_mtimecmp(mtimecmp);
 
     for (;;) {
         __asm__ __volatile__("wfi");
     }
+}
+
+static inline void w_mstatus(uint64_t x)
+{
+  __asm__ __volatile__("csrw mstatus, %0" : : "r" (x));
 }
 
 void kernel_main(void) {
@@ -266,6 +301,36 @@ void kernel_main(void) {
 
     // Set the exception handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
+
+    // Enable timer interrupts.
+    // uint32_t mie = READ_CSR(mie) | MIE_TIMER;
+    __asm__ __volatile__("csrs mie, %0" :: "r"(1 << 7));
+    // WRITE_CSR(mie, mie);
+
+    // Enable interrupts.
+    uint32_t x = READ_CSR(mstatus);
+    // printf("mstatus = %x\n", x);
+    // printf("mstatus = %x\n", x | MSTATUS_MIE);
+    // WRITE_CSR(mstatus, x | MSTATUS_MIE);
+    uint32_t y = x | MSTATUS_MIE;
+    w_mstatus(y);
+
+    for (;;) {
+        printf("TEST\n");
+    }
+
+//     uint64_t mtimecmp = r_mtimecmp();
+//     printf("mtimecmp is %x\n", mtimecmp);
+// 
+//     uint64_t mtime = r_mtime();
+//     printf("mtime is %x\n", mtime);
+// 
+//     mtimecmp += 1000;
+//     w_mtimecmp(mtimecmp);
+
+    for (;;) {
+        __asm__ __volatile__("wfi");
+    }
 
     struct process *kernel_proc = &procs[0];
     paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
@@ -291,8 +356,6 @@ void kernel_main(void) {
 
     // Jump to idle for now, no timer interrupts so you'll be stuck there.
     idle();
-
-    __asm__ __volatile__("addi x19, x0, 0x2");
 
     for (;;) {
         __asm__ __volatile__("wfi");
