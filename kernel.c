@@ -116,11 +116,13 @@ void handle_trap(struct trap_frame *f) {
 
     printf("Trap\n");
 
-    if (mcause & (1 << 31) == 1) {
+    if ((mcause & (1 << 31)) == 1) {
         printf("Interrupt\n");
     } else {
         printf("Synchronous exception\n");
         printf("mcause is %x\n", mcause);
+        uint32_t mepc = READ_CSR(mepc);
+        printf("mepc is %x\n", mepc);
     }
 
 //    if (mcause & (1 << 31) == 1) {
@@ -295,64 +297,63 @@ static inline void w_mstatus(uint64_t x)
   __asm__ __volatile__("csrw mstatus, %0" : : "r" (x));
 }
 
+void init_task() {
+    struct process *kernel_proc = &procs[0];
+    paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
+    kernel_proc->pid = 0;
+    kernel_proc->state = PROC_RUNNABLE;
+
+    paddr_t ra;
+    __asm__ __volatile("mv %[out], ra\n" : [out] "=r"(ra) : );
+
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = (uint32_t) ra;
+
+    kernel_proc->sp = (paddr_t) sp;
+
+    __asm__ __volatile__(
+        "csrw mscratch, %[mscratch]\n"
+        :
+        : [mscratch] "r" ((uint32_t) kernel_proc->sp)
+    );
+
+    current_proc = &procs[0];
+
+    // TODO: switch stacks
+}
+
 void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
+
+    // TODO: control needs to resume to the next line even after
+    // changing stack.
+    // The first process must be initiated before enabling interrupts.
+    init_task();
 
     // Set the exception handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
     // Enable timer interrupts.
-    // uint32_t mie = READ_CSR(mie) | MIE_TIMER;
-    __asm__ __volatile__("csrs mie, %0" :: "r"(1 << 7));
-    // WRITE_CSR(mie, mie);
+    // WRITE_CSR(mie, READ_CSR(mie) | MIE_TIMER);
 
     // Enable interrupts.
-    uint32_t x = READ_CSR(mstatus);
-    // printf("mstatus = %x\n", x);
-    // printf("mstatus = %x\n", x | MSTATUS_MIE);
-    // WRITE_CSR(mstatus, x | MSTATUS_MIE);
-    uint32_t y = x | MSTATUS_MIE;
-    w_mstatus(y);
-
-    for (;;) {
-        printf("TEST\n");
-    }
-
-//     uint64_t mtimecmp = r_mtimecmp();
-//     printf("mtimecmp is %x\n", mtimecmp);
-// 
-//     uint64_t mtime = r_mtime();
-//     printf("mtime is %x\n", mtime);
-// 
-//     mtimecmp += 1000;
-//     w_mtimecmp(mtimecmp);
+    // WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
 
     for (;;) {
         __asm__ __volatile__("wfi");
     }
-
-    struct process *kernel_proc = &procs[0];
-    paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
-    kernel_proc->pid = 0;
-    kernel_proc->state = PROC_RUNNABLE;
-    kernel_proc->sp = (paddr_t) sp;
-
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = (uint32_t) idle;
-
-    current_proc = &procs[0];
 
     // Jump to idle for now, no timer interrupts so you'll be stuck there.
     idle();
