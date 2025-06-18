@@ -218,12 +218,13 @@ __attribute__((naked))
 void user_entry(void) {
     // After mret executes, the CPU will jump to the
     // address stored in mepc.
+    // TODO: fix up mepc.
     __asm__ __volatile__(
         "csrw mepc, %[mepc]        \n"
         "csrw mstatus, %[mstatus]  \n"
         "mret                      \n"
         :
-        : [mepc] "r" (USER_BASE),
+        : [mepc] "r" (0),
           [mstatus] "r" (MSTATUS_MPIE)
     );
 }
@@ -297,66 +298,55 @@ static inline void w_mstatus(uint64_t x)
   __asm__ __volatile__("csrw mstatus, %0" : : "r" (x));
 }
 
-void init_task() {
-    struct process *kernel_proc = &procs[0];
-    paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
-    kernel_proc->pid = 0;
-    kernel_proc->state = PROC_RUNNABLE;
+void init(void) {
+    printf("Hello!\n");
 
-    paddr_t ra;
-    __asm__ __volatile("mv %[out], ra\n" : [out] "=r"(ra) : );
+    for (;;) {
+        __asm__ __volatile__("wfi");
+    }
+}
 
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = (uint32_t) ra;
-
-    kernel_proc->sp = (paddr_t) sp;
-
-    __asm__ __volatile__(
-        "csrw mscratch, %[mscratch]\n"
+__attribute__((noreturn))
+void switch_to_init(paddr_t sp) {
+    __asm__ __volatile__ (
+        "mv sp, %[sp]\n"
+        "csrw mscratch, %[sp]\n"
+        "call init\n"
         :
-        : [mscratch] "r" ((uint32_t) kernel_proc->sp)
+        : [sp] "r" (sp)
     );
 
-    current_proc = &procs[0];
-
-    // TODO: switch stacks
+    __builtin_unreachable();
 }
 
 void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
-    // TODO: control needs to resume to the next line even after
-    // changing stack.
-    // The first process must be initiated before enabling interrupts.
-    init_task();
-
     // Set the exception handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
     // Enable timer interrupts.
-    // WRITE_CSR(mie, READ_CSR(mie) | MIE_TIMER);
+    WRITE_CSR(mie, READ_CSR(mie) | MIE_TIMER);
+
+    struct process *kernel_proc = &procs[0];
+    paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
+
+    // The RISC-V calling convention specifies that the stack must be 16-byte
+    // aligned at call boundaries.
+    sp = (paddr_t *) align_up(sp, 16);
+
+    kernel_proc->pid = 0;
+    kernel_proc->state = PROC_RUNNABLE;
+    kernel_proc->sp = (paddr_t) sp;
+
+    current_proc = &procs[0];
+
+    // Start executing using PID 0's stack, never return.
+    switch_to_init((paddr_t)sp);
 
     // Enable interrupts.
     // WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
-
-    for (;;) {
-        __asm__ __volatile__("wfi");
-    }
-
-    // Jump to idle for now, no timer interrupts so you'll be stuck there.
-    idle();
 
     for (;;) {
         __asm__ __volatile__("wfi");

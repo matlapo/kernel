@@ -7,7 +7,6 @@
 #define PROC_UNUSED   0       // Unused process control structure
 #define PROC_RUNNABLE 1       // Runnable process
 
-#define USER_BASE 0x1000000   // Load address of a user program.
 #define MSTATUS_MIE (1 << 3)  // Interrupts enabled.
 #define MIE_TIMER (1 << 7)    // Timer interrupts enabled.
 #define MSTATUS_MPIE (1 << 7) // Saved value of mstatus.MIE during an interrupt.
