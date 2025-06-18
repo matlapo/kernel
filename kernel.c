@@ -10,7 +10,6 @@ extern void uart_putc(uint8_t c);
 struct process procs[PROCS_MAX];
 
 struct process *current_proc; // Currently running process
-struct process *idle_proc;    // Idle process
 
 void sched(void);
 
@@ -111,13 +110,61 @@ void kernel_entry(void) {
     );
 }
 
+static inline uint64_t r_mtimecmp()
+{
+    return *(volatile uint64_t *)0x2004000;
+}
+
+static inline void w_mtimecmp(uint64_t mtimecmp)
+{
+    *(volatile uint64_t *)0x2004000 = mtimecmp;
+}
+
+static inline uint64_t r_mtime()
+{
+    uint32_t hi1, lo, hi2;
+    volatile uint32_t *mtime32 = (uint32_t *)0x0200BFF8;
+
+    // On 32-bit RISC-V, a C compiler turns a 64-bit read as
+    // two 32-bit loads. If we're unlucky and mtime increments
+    // between the low and high loads (e.g., when the low part
+    // wraps around), it would make it seem like mtime has
+    // decremented.
+    do {
+        hi1 = mtime32[1];
+        lo = mtime32[0];
+        hi2 = mtime32[1];
+    } while (hi1 != hi2);
+
+    uint64_t mtime = ((uint64_t)hi2 << 32) | lo;
+    return mtime;
+}
+
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
 
     printf("Trap\n");
 
-    if ((mcause & (1 << 31)) == 1) {
-        printf("Interrupt\n");
+    uint32_t exception_code = mcause & MCAUSE_CODE;
+    if ((mcause >> 31) == 1) {
+        if (exception_code == MCAUSE_TIMER) {
+            printf("TIMER INTERRUPT\n");
+
+            uint64_t mtimecmp = r_mtimecmp();
+            uint32_t mtimecmp_lo = mtimecmp & 0xFFFFFFFF;
+            uint32_t mtimecmp_hi = mtimecmp >> 32;
+            printf("mtimecmp_lo is %x\n", mtimecmp_lo);
+            printf("mtimecmp_hi is %x\n", mtimecmp_hi);
+
+            uint64_t mtime = r_mtime();
+            uint32_t mtime_lo = mtime & 0xFFFFFFFF;
+            uint32_t mtime_hi = mtime >> 32;
+            printf("mtime_lo is %x\n", mtime_lo);
+            printf("mtime_hi is %x\n", mtime_hi);
+
+            uint64_t t = mtime + 10000000;
+            w_mtimecmp(t);
+        }
     } else {
         printf("Synchronous exception\n");
         printf("mcause is %x\n", mcause);
@@ -231,7 +278,7 @@ void user_entry(void) {
 
 void sched(void) {
     // Search for a runnable process
-    struct process *next = idle_proc;
+    struct process *next = &procs[0];
     for (int i = 0; i < PROCS_MAX; i++) {
         struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
         if (proc->state == PROC_RUNNABLE) {
@@ -257,49 +304,11 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
-static inline uint64_t r_mtimecmp()
-{
-    return *(volatile uint64_t *)0x02000000;
-}
-
-static inline void w_mtimecmp(uint64_t mtimecmp)
-{
-    *(volatile uint64_t *)0x2000000 = mtimecmp;
-}
-
-// TODO: not safe! This value is incremented by hardware
-// and the compiler generates two 32-bit load instructions
-// which won't be atomic. Although, not sure what one would
-// do here, maybe it's fine.
-static inline uint64_t r_mtime()
-{
-    return *(volatile uint64_t *)0x02007ff8;
-}
-
-void idle(void) {
-    printf("Hello\n");
-
-    uint64_t mtimecmp = r_mtimecmp();
-    printf("mtimecmp is %x\n", mtimecmp);
-
-    uint64_t mtime = r_mtime();
-    printf("mtime is %x\n", mtime);
-
-    mtimecmp += 1000;
-    w_mtimecmp(mtimecmp);
-
-    for (;;) {
-        __asm__ __volatile__("wfi");
-    }
-}
-
-static inline void w_mstatus(uint64_t x)
-{
-  __asm__ __volatile__("csrw mstatus, %0" : : "r" (x));
-}
-
 void init(void) {
     printf("Hello!\n");
+
+    // Enable interrupts.
+    WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
 
     for (;;) {
         __asm__ __volatile__("wfi");
@@ -344,9 +353,6 @@ void kernel_main(void) {
 
     // Start executing using PID 0's stack, never return.
     switch_to_init((paddr_t)sp);
-
-    // Enable interrupts.
-    // WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
 
     for (;;) {
         __asm__ __volatile__("wfi");
