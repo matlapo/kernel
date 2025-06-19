@@ -1,5 +1,6 @@
 #include "kernel.h"
 #include "common.h"
+#include "riscv.h"
 
 extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
@@ -13,36 +14,6 @@ struct process procs[PROCS_MAX];
 struct process *current_proc; // Currently running process
 
 void sched(void);
-
-static inline uint64_t r_mtimecmp()
-{
-    return *(volatile uint64_t *)MMIO_MTIMECMP;
-}
-
-static inline void w_mtimecmp(uint64_t mtimecmp)
-{
-    *(volatile uint64_t *)MMIO_MTIMECMP = mtimecmp;
-}
-
-static inline uint64_t r_mtime()
-{
-    uint32_t hi1, lo, hi2;
-    volatile uint32_t *mtime32 = (uint32_t *)MMIO_MTIME;
-
-    // On 32-bit RISC-V, a C compiler turns a 64-bit read as
-    // two 32-bit loads. If we're unlucky and mtime increments
-    // between the low and high loads (e.g., when the low part
-    // wraps around), it would make it seem like mtime has
-    // decremented.
-    do {
-        hi1 = mtime32[1];
-        lo = mtime32[0];
-        hi2 = mtime32[1];
-    } while (hi1 != hi2);
-
-    uint64_t mtime = ((uint64_t)hi2 << 32) | lo;
-    return mtime;
-}
 
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);

@@ -6,18 +6,7 @@
 #define PROCS_MAX 8             // Maximum number of processes.
 #define PROC_UNUSED   0         // Unused process control structure.
 #define PROC_RUNNABLE 1         // Runnable process.
-#define TIMER_TICKS 10000000    // Number of ticks before the next timer interrupt.
-
-#define MSTATUS_MIE (1 << 3)    // Interrupts enabled.
-#define MIE_TIMER (1 << 7)      // Timer interrupts enabled.
-#define MSTATUS_MPIE (1 << 7)   // Saved value of mstatus.MIE during an interrupt.
-#define MCAUSE_CODE 0x7FFFFFFF  // Exception cause
-#define MCAUSE_ECALL 8          // mcause value for the ecall instruction from U-mode.
-#define MCAUSE_TIMER 7          // mcause value for a timer interrupt.
 #define PROC_EXITED  2
-
-#define MMIO_MTIMECMP 0x2004000 // Address of mtimecmp for hart 0.
-#define MMIO_MTIME 0x0200BFF8   // Address of mtime.
 
 /// Process Control Block (PCB).
 ///
