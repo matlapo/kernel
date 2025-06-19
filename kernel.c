@@ -182,8 +182,6 @@ void switch_to_init(paddr_t sp) {
         :
         : [sp] "r" (sp)
     );
-
-    __builtin_unreachable();
 }
 
 void kernel_main(void) {
