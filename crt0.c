@@ -18,14 +18,6 @@ int syscall(int sysno, int arg0, int arg1, int arg2) {
     return a0;
 }
 
-void putchar(char ch) {
-    syscall(SYS_PUTCHAR, ch, 0, 0);
-}
-
-int getchar(void) {
-    return syscall(SYS_GETCHAR, 0, 0, 0);
-}
-
 __attribute__((noreturn)) void exit(void) {
     syscall(SYS_EXIT, 0, 0, 0);
     for (;;); // Just in case.
@@ -34,7 +26,7 @@ __attribute__((noreturn)) void exit(void) {
 // Entry point for a user program.
 __attribute__((section(".text.start")))
 __attribute__((naked))
-void start(void) {
+void _start(void) {
     // A 64Kb stack is statically allocated via the
     // user linker script. Before jumping to main,
     // point sp to it.
