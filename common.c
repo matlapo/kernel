@@ -1,6 +1,6 @@
 #include "common.h"
 
-void putchar(char ch);
+extern void uart_putc(uint8_t c);
 
 void *memcpy(void *dst, const void *src, size_t n) {
     uint8_t *d = (uint8_t *) dst;
@@ -33,8 +33,22 @@ int strcmp(const char *s1, const char *s2) {
         s2++;
     }
 
-    // unsigned char * to conform to POSIX.
     return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+// Taken from https://github.com/gcc-mirror/gcc/blob/master/libgcc/config/epiphany/mulsi3.c
+// TODO: panic if overflow
+unsigned int __mulsi3(unsigned int a, unsigned int b)
+{
+    unsigned int r = 0;
+    while (a)
+    {
+        if (a & 1)
+            r += b;
+        a >>= 1;
+        b <<= 1;
+    }
+    return r;
 }
 
 void printf(const char *fmt, ...) {
@@ -45,50 +59,30 @@ void printf(const char *fmt, ...) {
         if (*fmt == '%') {
             fmt++; // Skip '%'
             switch (*fmt) { // Read the next character
-                case '\0': // '%' at the end of the format string
-                    putchar('%');
+                case '\0':
+                    uart_putc('%');
                     goto end;
-                case '%': // Print '%'
-                    putchar('%');
+                case '%':
+                    uart_putc('%');
                     break;
                 case 's': { // Print a NULL-terminated string.
                     const char *s = va_arg(vargs, const char *);
                     while (*s) {
-                        putchar(*s);
+                        uart_putc(*s);
                         s++;
                     }
-                    break;
-                }
-                case 'd': { // Print an integer in decimal.
-                    int value = va_arg(vargs, int);
-                    if (value < 0) {
-                        putchar('-');
-                        value = -value;
-                    }
-
-                    int divisor = 1;
-                    while (value / divisor > 9)
-                        divisor *= 10;
-
-                    while (divisor > 0) {
-                        // '0' as an int is 48, which is "0" in ASCII.
-                        putchar('0' + value / divisor);
-                        value %= divisor;
-                        divisor /= 10;
-                    }
-
                     break;
                 }
                 case 'x': { // Print an integer in hexadecimal.
                     int value = va_arg(vargs, int);
                     for (int i = 7; i >= 0; i--) {
                         int nibble = (value >> (i * 4)) & 0xf;
-                        putchar("0123456789abcdef"[nibble]);
+                        uart_putc("0123456789abcdef"[nibble]);
                     }
                 }
             }
         } else {
-            putchar(*fmt);
+            uart_putc(*fmt);
         }
 
         fmt++;

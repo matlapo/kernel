@@ -7,7 +7,6 @@ typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 typedef uint32_t size_t;
 typedef uint32_t paddr_t;
-typedef uint32_t vaddr_t;
 
 #define SYS_PUTCHAR 1
 #define SYS_GETCHAR 2
@@ -16,10 +15,8 @@ typedef uint32_t vaddr_t;
 #define true  1
 #define false 0
 #define NULL  ((void *) 0)
-// Rounds up value to the nearest multiple of align. align must be a power of 2.
 #define align_up(value, align)   __builtin_align_up(value, align)
 #define is_aligned(value, align) __builtin_is_aligned(value, align)
-// Returns the offset (number of bytes) of a member within a structure.
 #define offsetof(type, member)   __builtin_offsetof(type, member)
 #define va_list  __builtin_va_list
 #define va_start __builtin_va_start
