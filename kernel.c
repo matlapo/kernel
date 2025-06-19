@@ -207,6 +207,13 @@ void kernel_main(void) {
 
     current_proc = &procs[0];
 
+    uint32_t *elf_p = (uint32_t *) 0x000048bd; // __free_ram_end;
+    printf("elf_p is %x\n", elf_p);
+    for(int i = 0; i < 100; i++) {
+        elf_p++;
+        printf("elf_p points to byte %x\n", *elf_p);
+    }
+
     // Start executing using PID 0's stack, never return.
     switch_to_init((paddr_t)sp);
 
