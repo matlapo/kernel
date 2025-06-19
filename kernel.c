@@ -112,18 +112,18 @@ void kernel_entry(void) {
 
 static inline uint64_t r_mtimecmp()
 {
-    return *(volatile uint64_t *)0x2004000;
+    return *(volatile uint64_t *)MMIO_MTIMECMP;
 }
 
 static inline void w_mtimecmp(uint64_t mtimecmp)
 {
-    *(volatile uint64_t *)0x2004000 = mtimecmp;
+    *(volatile uint64_t *)MMIO_MTIMECMP = mtimecmp;
 }
 
 static inline uint64_t r_mtime()
 {
     uint32_t hi1, lo, hi2;
-    volatile uint32_t *mtime32 = (uint32_t *)0x0200BFF8;
+    volatile uint32_t *mtime32 = (uint32_t *)MMIO_MTIME;
 
     // On 32-bit RISC-V, a C compiler turns a 64-bit read as
     // two 32-bit loads. If we're unlucky and mtime increments
@@ -148,21 +148,10 @@ void handle_trap(struct trap_frame *f) {
     uint32_t exception_code = mcause & MCAUSE_CODE;
     if ((mcause >> 31) == 1) {
         if (exception_code == MCAUSE_TIMER) {
-            printf("TIMER INTERRUPT\n");
-
             uint64_t mtimecmp = r_mtimecmp();
-            uint32_t mtimecmp_lo = mtimecmp & 0xFFFFFFFF;
-            uint32_t mtimecmp_hi = mtimecmp >> 32;
-            printf("mtimecmp_lo is %x\n", mtimecmp_lo);
-            printf("mtimecmp_hi is %x\n", mtimecmp_hi);
-
             uint64_t mtime = r_mtime();
-            uint32_t mtime_lo = mtime & 0xFFFFFFFF;
-            uint32_t mtime_hi = mtime >> 32;
-            printf("mtime_lo is %x\n", mtime_lo);
-            printf("mtime_hi is %x\n", mtime_hi);
 
-            uint64_t t = mtime + 10000000;
+            uint64_t t = mtime + TIMER_TICKS;
             w_mtimecmp(t);
         }
     } else {
@@ -170,13 +159,6 @@ void handle_trap(struct trap_frame *f) {
         printf("mcause is %x\n", mcause);
         uint32_t mepc = READ_CSR(mepc);
         printf("mepc is %x\n", mepc);
-    }
-
-//    if (mcause & (1 << 31) == 1) {
-//        if (mcause & 0x7fffffff == 7) {
-//           // TODO: handle timer interrupt.
-//        }
-//    } else {
 //        // uint32_t uepc = READ_CSR(uepc);
 //        if (mcause == MCAUSE_ECALL) {
 //            // TODO: handle syscall.
@@ -185,7 +167,7 @@ void handle_trap(struct trap_frame *f) {
 //        } else {
 //            panic("unexpected trap mcause=%x, mepc=%x\n", mcause, mepc);
 //        }
-//    }
+    }
 
 // TODO: prologue and epilogue should be the same regardless of the
 // exception kind.
@@ -311,6 +293,7 @@ void init(void) {
     WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
 
     for (;;) {
+        printf("Hello!\n");
         __asm__ __volatile__("wfi");
     }
 }
