@@ -5,6 +5,7 @@
 extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
 extern char __free_ram[], __free_ram_end[];
+extern char __app_start[], __app_end[];
 
 extern void uart_putc(uint8_t c);
 extern void kernel_entry(void);
@@ -207,11 +208,11 @@ void kernel_main(void) {
 
     current_proc = &procs[0];
 
-    uint32_t *elf_p = (uint32_t *) 0x000048bd; // __free_ram_end;
+    uint8_t *elf_p = (uint8_t *) __app_start; // __free_ram_end;
     printf("elf_p is %x\n", elf_p);
-    for(int i = 0; i < 100; i++) {
-        elf_p++;
+    for(int i = 0; i < 10; i++) {
         printf("elf_p points to byte %x\n", *elf_p);
+        elf_p++;
     }
 
     // Start executing using PID 0's stack, never return.
