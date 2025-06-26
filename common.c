@@ -17,6 +17,19 @@ void *memset(void *buf, char c, size_t n) {
     return buf;
 }
 
+int memcmp(const void *src1, const void *src2, size_t n) {
+    const uint8_t *p1 = (uint8_t *) src1;
+    const uint8_t *p2 = (uint8_t *) src2;
+    while (n--) {
+        if (*p1 != *p2) {
+            return (int)(*p1 - *p2);
+        }
+        p1++;
+        p2++;
+    }
+    return 0;
+}
+
 char *strcpy(char *dst, const char *src) {
     char *d = dst;
     while (*src)

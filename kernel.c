@@ -162,10 +162,99 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
+struct elf_header {
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint32_t e_entry;
+    uint32_t e_phoff;
+    uint32_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+};
+
+inline uint16_t read_u16(void **p) {
+    uint8_t *d = *(uint8_t **)p;
+    uint16_t v = d[0] | (d[1] << 8);
+    *p += 2;
+    return v;
+}
+
+inline uint32_t read_u32(void **p) {
+    uint8_t *d = *(uint8_t **)p;
+    uint32_t v = d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24);
+    *p += 4;
+    return v;
+}
+
+__attribute__((noreturn))
 void load_app(void) {
     uint8_t *elf_p = (uint8_t *) __app_start;
     printf("elf_p is %x\n", elf_p);
-    for(int i = 0; i < 10; i++) {
+
+    const uint8_t elf_magic[16] = {
+        0x7F, 0x45, 0x4C, 0x46,
+        0x01, 0x01, 0x01, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00
+    };
+
+    if (memcmp(elf_p, elf_magic, 16) != 0) {
+        printf("Not an ELF file\n");
+        // exit();
+    }
+    elf_p += 16;
+
+    uint16_t e_type = read_u16((void **)&elf_p);
+    uint16_t e_machine = read_u16((void **)&elf_p);
+    uint32_t e_version = read_u32((void **)&elf_p);
+    uint32_t e_entry = read_u32((void **)&elf_p);
+    uint32_t e_phoff = read_u32((void **)&elf_p);
+    uint32_t e_shoff = read_u32((void **)&elf_p);
+    uint32_t e_flags = read_u32((void **)&elf_p);
+    uint16_t e_ehsize = read_u16((void **)&elf_p);
+    uint16_t e_phentsize = read_u16((void **)&elf_p);
+    uint16_t e_phnum = read_u16((void **)&elf_p);
+    uint16_t e_shentsize = read_u16((void **)&elf_p);
+    uint16_t e_shnum = read_u16((void **)&elf_p);
+    uint16_t e_shstrndx = read_u16((void **)&elf_p);
+
+    printf("e_type is %x\n", e_type);
+    printf("e_machine is %x\n", e_machine);
+    printf("e_version is %x\n", e_version);
+    printf("e_entry is %x\n", e_entry);
+    printf("e_phoff is %x\n", e_phoff);
+    printf("e_shoff is %x\n", e_shoff);
+    printf("e_flags is %x\n", e_flags);
+    printf("e_ehsize is %x\n", e_ehsize);
+    printf("e_phentsize is %x\n", e_phentsize);
+    printf("e_phnum is %x\n", e_phnum);
+    printf("e_shentsize is %x\n", e_shentsize);
+    printf("e_shnum is %x\n", e_shnum);
+    printf("e_shstrndx is %x\n", e_shstrndx);
+
+    struct elf_header header = {
+        .e_type = e_type,
+        .e_machine = e_machine,
+        .e_version = e_version,
+        .e_entry = e_entry,
+        .e_phoff = e_phoff,
+        .e_shoff = e_shoff,
+        .e_flags = e_flags,
+        .e_ehsize = e_ehsize,
+        .e_phentsize = e_phentsize,
+        .e_phnum = e_phnum,
+        .e_shentsize = e_shentsize,
+        .e_shnum = e_shnum,
+        .e_shstrndx = e_shstrndx,
+    };
+
+    for (int i = 0; i < 10; i++) {
         printf("elf_p points to byte %x\n", *elf_p);
         elf_p++;
     }
@@ -174,6 +263,9 @@ void load_app(void) {
         printf("Hella!\n");
         __asm__ __volatile__("wfi");
     }
+
+    // Create process for app.
+    // Exit().
 }
 
 void init(void) {
