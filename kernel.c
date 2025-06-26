@@ -137,7 +137,7 @@ void user_entry(void) {
 void sched(void) {
     // Search for a runnable process
     struct process *next = &procs[0];
-    for (int i = 0; i < PROCS_MAX; i++) {
+    for (int i = 1; i <= PROCS_MAX; i++) {
         struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
         if (proc->state == PROC_RUNNABLE) {
             next = proc;
@@ -162,11 +162,50 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
-void init(void) {
-    printf("Hello!\n");
+void load_app(void) {
+    uint8_t *elf_p = (uint8_t *) __app_start;
+    printf("elf_p is %x\n", elf_p);
+    for(int i = 0; i < 10; i++) {
+        printf("elf_p points to byte %x\n", *elf_p);
+        elf_p++;
+    }
 
+    for (;;) {
+        printf("Hella!\n");
+        __asm__ __volatile__("wfi");
+    }
+}
+
+void init(void) {
     // Enable interrupts.
     WRITE_CSR(mstatus, READ_CSR(mstatus) | MSTATUS_MIE);
+
+    // ELF loader.
+    struct process *loader_proc = &procs[1];
+    paddr_t *sp = (paddr_t *) &loader_proc->stack[sizeof(loader_proc->stack)];
+
+    loader_proc->pid = 1;
+    loader_proc->state = PROC_RUNNABLE;
+
+    // switch_context() assumes the next thread's register state is already saved
+    // on its stack.
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = (paddr_t) load_app;
+
+    loader_proc->sp = (paddr_t) sp;
+
+    sched();
 
     for (;;) {
         printf("Hello!\n");
@@ -207,13 +246,6 @@ void kernel_main(void) {
     kernel_proc->sp = (paddr_t) sp;
 
     current_proc = &procs[0];
-
-    uint8_t *elf_p = (uint8_t *) __app_start; // __free_ram_end;
-    printf("elf_p is %x\n", elf_p);
-    for(int i = 0; i < 10; i++) {
-        printf("elf_p points to byte %x\n", *elf_p);
-        elf_p++;
-    }
 
     // Start executing using PID 0's stack, never return.
     switch_to_init((paddr_t)sp);
