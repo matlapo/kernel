@@ -178,6 +178,17 @@ struct elf_header {
     uint16_t e_shstrndx;
 };
 
+struct elf_ph {
+    uint32_t p_type;
+    uint32_t p_offset;
+    uint32_t p_vaddr;
+    uint32_t p_paddr;
+    uint32_t p_filesz;
+    uint32_t p_memsz;
+    uint32_t p_flags;
+    uint32_t p_align;
+};
+
 inline uint16_t read_u16(void **p) {
     uint8_t *d = *(uint8_t **)p;
     uint16_t v = d[0] | (d[1] << 8);
@@ -194,6 +205,7 @@ inline uint32_t read_u32(void **p) {
 
 __attribute__((noreturn))
 void load_app(void) {
+    const paddr_t load_address = (paddr_t) __app_start;
     uint8_t *elf_p = (uint8_t *) __app_start;
     printf("elf_p is %x\n", elf_p);
 
@@ -224,20 +236,6 @@ void load_app(void) {
     uint16_t e_shnum = read_u16((void **)&elf_p);
     uint16_t e_shstrndx = read_u16((void **)&elf_p);
 
-    printf("e_type is %x\n", e_type);
-    printf("e_machine is %x\n", e_machine);
-    printf("e_version is %x\n", e_version);
-    printf("e_entry is %x\n", e_entry);
-    printf("e_phoff is %x\n", e_phoff);
-    printf("e_shoff is %x\n", e_shoff);
-    printf("e_flags is %x\n", e_flags);
-    printf("e_ehsize is %x\n", e_ehsize);
-    printf("e_phentsize is %x\n", e_phentsize);
-    printf("e_phnum is %x\n", e_phnum);
-    printf("e_shentsize is %x\n", e_shentsize);
-    printf("e_shnum is %x\n", e_shnum);
-    printf("e_shstrndx is %x\n", e_shstrndx);
-
     struct elf_header header = {
         .e_type = e_type,
         .e_machine = e_machine,
@@ -253,6 +251,64 @@ void load_app(void) {
         .e_shnum = e_shnum,
         .e_shstrndx = e_shstrndx,
     };
+
+    elf_p = (uint8_t *) load_address + header.e_phoff;
+    uint32_t p_type = read_u32((void **)&elf_p);
+    uint32_t p_offset = read_u32((void **)&elf_p);
+    uint32_t p_vaddr = read_u32((void **)&elf_p);
+    uint32_t p_paddr = read_u32((void **)&elf_p);
+    uint32_t p_filesz = read_u32((void **)&elf_p);
+    uint32_t p_memsz = read_u32((void **)&elf_p);
+    uint32_t p_flags = read_u32((void **)&elf_p);
+    uint32_t p_align = read_u32((void **)&elf_p);
+
+    struct elf_ph ph_1 = {
+        .p_type = p_type,
+        .p_offset = p_offset,
+        .p_vaddr = p_vaddr,
+        .p_paddr = p_paddr,
+        .p_filesz = p_filesz,
+        .p_memsz = p_memsz,
+        .p_flags = p_flags,
+        .p_align = p_align,
+    };
+
+    printf("ptype = %x\n", p_type);
+    printf("poffset = %x\n", p_offset);
+    printf("pvaddr = %x\n", p_vaddr);
+    printf("ppaddr = %x\n", p_paddr);
+    printf("pfilesz = %x\n", p_filesz);
+    printf("pmemsz = %x\n", p_memsz);
+    printf("pflags = %x\n", p_flags);
+    printf("palign = %x\n", p_align);
+
+    struct process *app_proc = &procs[2];
+    paddr_t *sp = (paddr_t *) &app_proc->stack[sizeof(app_proc->stack)];
+
+    app_proc->pid = 2;
+    app_proc->state = PROC_RUNNABLE;
+
+    // switch_context() assumes the next thread's register state is already saved
+    // on its stack.
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = 0;
+    *--sp = (paddr_t) load_address + header.e_entry;
+
+    app_proc->sp = (paddr_t) sp;
+
+    // TODO: should really call exit() here and the trap handler will
+    // call sched().
+    // sched();
 
     for (int i = 0; i < 10; i++) {
         printf("elf_p points to byte %x\n", *elf_p);
