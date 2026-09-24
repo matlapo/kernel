@@ -5,8 +5,8 @@ set -xue
 QEMU=qemu-system-riscv32
 
 # Path to clang and compiler flags.
-CC=clang
-CFLAGS="-std=c11 -O2 -Wall -Wextra --target=riscv32 -march=rv32i -ffreestanding -nostdlib"
+CC=${CC:-clang}
+CFLAGS="-std=c11 -O2 -Wall -Wextra --target=riscv32 -march=rv32i -ffreestanding -nostdlib ${EXTRA_CFLAGS:-}"
 
 # Build the application.
 $CC $CFLAGS -fPIE -Wl,-pie -Wl,-Tuser.ld -Wl,-Map=app.map -o app.elf app.c crt0.c
