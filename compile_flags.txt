@@ -1,0 +1,7 @@
+-std=c11
+-Wall
+-Wextra
+--target=riscv32
+-march=rv32i
+-ffreestanding
+-nostdlib
