@@ -10,6 +10,10 @@ extern char __app_start[], __app_end[];
 extern void uart_putc(uint8_t c);
 extern void kernel_entry(void);
 
+// The kernel maintains a list of processes. Each process has a
+// statically-allocated stack. This whole structure is allocated
+// in the .bss section by clang and zeroed at boot time by
+// kernel_main.
 struct process procs[PROCS_MAX];
 
 struct process *current_proc; // Currently running process
@@ -376,7 +380,7 @@ void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
-    // Set the exception handler.
+    // Set the trap handler.
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
     // Enable timer interrupts.

@@ -12,7 +12,7 @@ kernel_entry:
         csrrw sp, mscratch, sp
 
         # Save all general-purpose registers onto the kernel stack.
-        addi sp, sp, -4 * 31
+        addi sp, sp, -4 * 32
         sw ra,  4 * 0(sp)
         sw gp,  4 * 1(sp)
         sw tp,  4 * 2(sp)
@@ -51,7 +51,7 @@ kernel_entry:
         # Once the exception is handled and the user code
         # runs again, mscratch needs to hold the same value
         # it held prior to entering the kernel.
-        addi a0, sp, 4 * 31
+        addi a0, sp, 4 * 32
         csrw mscratch, a0
 
         # handle_trap takes a pointer to a trap frame, which
@@ -92,4 +92,3 @@ kernel_entry:
         lw sp,  4 * 30(sp)
 
         mret
-

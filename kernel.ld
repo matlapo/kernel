@@ -1,10 +1,18 @@
+/*
+* ENTRY tells the linker that the entry point of the
+* ELF file should be at whichever address this symbol located.
+*/
 ENTRY(boot)
 
 SECTIONS {
+    /*
+    * RAM starts at 0x80000000 on QEMU, so we picked that as the base address for the kernel.
+    * The kernel.elf file will be loaded at this address by QEMU since it understands ELF.
+    */
     . = 0x80000000;
     __kernel_base = .;
 
-    .text :{
+    .text : {
         KEEP(*(.text.boot));
         *(.text .text.*);
     }
