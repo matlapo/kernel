@@ -128,6 +128,7 @@ void user_entry(void) {
     // After mret executes, the CPU will jump to the
     // address stored in mepc.
     // TODO: fix up mepc.
+    // TODO: need to set mscratch to the top of the kernel stack
     __asm__ __volatile__(
         "csrw mepc, %[mepc]        \n"
         "csrw mstatus, %[mstatus]  \n"
@@ -151,14 +152,6 @@ void sched(void) {
 
     if (next == current_proc)
         return;
-
-    // Exception handlers expect mscratch to hold the kernel stack address of
-    // the currently running process.
-    __asm__ __volatile__(
-        "csrw mscratch, %[mscratch]\n"
-        :
-        : [mscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)])
-    );
 
     // Switch PCB
     struct process *prev = current_proc;
@@ -369,7 +362,7 @@ __attribute__((noreturn))
 void switch_to_init(paddr_t sp) {
     __asm__ __volatile__ (
         "mv sp, %[sp]\n"
-        "csrw mscratch, %[sp]\n"
+        "csrw mscratch, zero\n"
         "call init\n"
         :
         : [sp] "r" (sp)
@@ -388,10 +381,6 @@ void kernel_main(void) {
 
     struct process *kernel_proc = &procs[0];
     paddr_t *sp = (paddr_t *) &kernel_proc->stack[sizeof(kernel_proc->stack)];
-
-    // The RISC-V calling convention specifies that the stack must be 16-byte
-    // aligned at call boundaries.
-    sp = (paddr_t *) align_up(sp, 16);
 
     kernel_proc->pid = 0;
     kernel_proc->state = PROC_RUNNABLE;

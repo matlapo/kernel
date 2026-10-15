@@ -22,6 +22,7 @@ struct process {
     int pid;               // Process ID
     int state;             // Process state: PROC_UNUSED or PROC_RUNNABLE.
     paddr_t sp;            // Stack pointer within the stack region.
+    __attribute__((aligned(16)))
     uint8_t stack[8192];   // Statically-allocated stack for the kernel.
 };
 
@@ -82,4 +83,3 @@ struct trap_frame {
         uint32_t __tmp = (value);                                              \
         __asm__ __volatile__("csrw " #reg ", %0" ::"r"(__tmp));                \
     } while (0)
-
