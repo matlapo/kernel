@@ -68,7 +68,7 @@ paddr_t alloc_pages(uint32_t n) {
 
 // Transfer control of the CPU from one kernel thread to another. When
 // this function returns, it will be a different kernel thread than
-// the one calling it.
+// the one calling it (different stack).
 __attribute__((naked))
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
      // Just like preemptive multitasking, every register needs to be saved somewhere
@@ -83,7 +83,7 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
      // to handle callee-saved registers.
     __asm__ __volatile__(
         // Save callee-saved registers onto the current process's stack.
-        "addi sp, sp, -13 * 4\n"
+        "addi sp, sp, -16 * 4\n"
         "sw ra,  0  * 4(sp)\n"
         "sw s0,  1  * 4(sp)\n"
         "sw s1,  2  * 4(sp)\n"
@@ -116,7 +116,7 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp) {
         "lw s9,  10 * 4(sp)\n"
         "lw s10, 11 * 4(sp)\n"
         "lw s11, 12 * 4(sp)\n"
-        "addi sp, sp, 13 * 4\n"
+        "addi sp, sp, 16 * 4\n"
 
         "ret\n"
     );
@@ -287,18 +287,9 @@ void load_app(void) {
 
     // switch_context() assumes the next thread's register state is already saved
     // on its stack.
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
+    for (int i = 0; i < SWITCH_FRAME_WORDS - 1; i++) {
+        *--sp = 0;
+    }
     *--sp = (paddr_t) load_address + header.e_entry;
 
     app_proc->sp = (paddr_t) sp;
@@ -334,18 +325,9 @@ void init(void) {
 
     // switch_context() assumes the next thread's register state is already saved
     // on its stack.
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
-    *--sp = 0;
+    for (int i = 0; i < SWITCH_FRAME_WORDS - 1; i++) {
+        *--sp = 0;
+    }
     *--sp = (paddr_t) load_app;
 
     loader_proc->sp = (paddr_t) sp;

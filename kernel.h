@@ -7,6 +7,7 @@
 #define PROC_UNUSED   0         // Unused process control structure.
 #define PROC_RUNNABLE 1         // Runnable process.
 #define PROC_EXITED  2
+#define SWITCH_FRAME_WORDS 16   // Words in a context switch frame: ra, s0-s11 + padding
 
 /// Process Control Block (PCB).
 ///
