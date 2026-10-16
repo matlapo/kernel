@@ -183,14 +183,14 @@ struct elf_ph {
     uint32_t p_align;
 };
 
-inline uint16_t read_u16(void **p) {
+static uint16_t read_u16(void **p) {
     uint8_t *d = *(uint8_t **)p;
     uint16_t v = d[0] | (d[1] << 8);
     *p += 2;
     return v;
 }
 
-inline uint32_t read_u32(void **p) {
+static uint32_t read_u32(void **p) {
     uint8_t *d = *(uint8_t **)p;
     uint32_t v = d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24);
     *p += 4;
