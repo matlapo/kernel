@@ -19,6 +19,7 @@ struct process procs[PROCS_MAX];
 struct process *current_proc; // Currently running process
 
 void sched(void);
+void set_mtimecmp();
 
 void handle_trap(struct trap_frame *f) {
     uint32_t mcause = READ_CSR(mcause);
@@ -28,11 +29,7 @@ void handle_trap(struct trap_frame *f) {
     uint32_t exception_code = mcause & MCAUSE_CODE;
     if ((mcause >> 31) == 1) {
         if (exception_code == MCAUSE_TIMER) {
-            uint64_t mtimecmp = r_mtimecmp();
-            uint64_t mtime = r_mtime();
-
-            uint64_t t = mtime + TIMER_TICKS;
-            w_mtimecmp(t);
+            set_mtimecmp();
         }
     } else {
         printf("Synchronous exception\n");
@@ -351,6 +348,12 @@ void switch_to_init(paddr_t sp) {
     );
 }
 
+void set_mtimecmp(void) {
+    uint64_t mtime = r_mtime();
+    uint64_t t = mtime + TIMER_TICKS;
+    w_mtimecmp(t);
+}
+
 void kernel_main(void) {
     // Init the bss region with 0s.
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
@@ -359,6 +362,7 @@ void kernel_main(void) {
     WRITE_CSR(mtvec, (uint32_t) kernel_entry);
 
     // Enable timer interrupts.
+    set_mtimecmp();
     WRITE_CSR(mie, READ_CSR(mie) | MIE_TIMER);
 
     struct process *kernel_proc = &procs[0];
