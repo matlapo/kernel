@@ -1,6 +1,7 @@
 #include "kernel.h"
 #include "common.h"
 #include "riscv.h"
+#include "elf.h"
 
 extern char __kernel_base[];
 extern char __bss[], __bss_end[], __stack_top[];
@@ -156,33 +157,6 @@ void sched(void) {
     switch_context(&prev->sp, &next->sp);
 }
 
-struct elf_header {
-    uint16_t e_type;
-    uint16_t e_machine;
-    uint32_t e_version;
-    uint32_t e_entry;
-    uint32_t e_phoff;
-    uint32_t e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize;
-    uint16_t e_phentsize;
-    uint16_t e_phnum;
-    uint16_t e_shentsize;
-    uint16_t e_shnum;
-    uint16_t e_shstrndx;
-};
-
-struct elf_ph {
-    uint32_t p_type;
-    uint32_t p_offset;
-    uint32_t p_vaddr;
-    uint32_t p_paddr;
-    uint32_t p_filesz;
-    uint32_t p_memsz;
-    uint32_t p_flags;
-    uint32_t p_align;
-};
-
 static uint16_t read_u16(void **p) {
     uint8_t *d = *(uint8_t **)p;
     uint16_t v = d[0] | (d[1] << 8);
@@ -201,7 +175,7 @@ __attribute__((noreturn))
 void load_app(void) {
     const paddr_t load_address = (paddr_t) __app_start;
     uint8_t *elf_p = (uint8_t *) __app_start;
-    printf("elf_p is %x\n", elf_p);
+    printf("elf_p is %x", elf_p);
 
     const uint8_t elf_magic[16] = {
         0x7F, 0x45, 0x4C, 0x46,
@@ -211,8 +185,7 @@ void load_app(void) {
     };
 
     if (memcmp(elf_p, elf_magic, 16) != 0) {
-        printf("Not an ELF file\n");
-        // exit();
+        panic("executable is not an ELF file");
     }
     elf_p += 16;
 
@@ -246,35 +219,61 @@ void load_app(void) {
         .e_shstrndx = e_shstrndx,
     };
 
-    elf_p = (uint8_t *) load_address + header.e_phoff;
-    uint32_t p_type = read_u32((void **)&elf_p);
-    uint32_t p_offset = read_u32((void **)&elf_p);
-    uint32_t p_vaddr = read_u32((void **)&elf_p);
-    uint32_t p_paddr = read_u32((void **)&elf_p);
-    uint32_t p_filesz = read_u32((void **)&elf_p);
-    uint32_t p_memsz = read_u32((void **)&elf_p);
-    uint32_t p_flags = read_u32((void **)&elf_p);
-    uint32_t p_align = read_u32((void **)&elf_p);
+    if (header.e_version != EV_CURRENT) {
+        panic("wrong ELF version");
+    }
 
-    struct elf_ph ph_1 = {
-        .p_type = p_type,
-        .p_offset = p_offset,
-        .p_vaddr = p_vaddr,
-        .p_paddr = p_paddr,
-        .p_filesz = p_filesz,
-        .p_memsz = p_memsz,
-        .p_flags = p_flags,
-        .p_align = p_align,
-    };
+    if (header.e_type != ET_DYN) {
+        panic("executable needs to be ET_DYN");
+    }
 
-    printf("ptype = %x\n", p_type);
-    printf("poffset = %x\n", p_offset);
-    printf("pvaddr = %x\n", p_vaddr);
-    printf("ppaddr = %x\n", p_paddr);
-    printf("pfilesz = %x\n", p_filesz);
-    printf("pmemsz = %x\n", p_memsz);
-    printf("pflags = %x\n", p_flags);
-    printf("palign = %x\n", p_align);
+    if (header.e_machine != EM_RISCV) {
+        panic("executable needs to target riscv");
+    }
+
+    // Allocate memory for the PT_LOAD segments.
+    uint32_t image_size = 0;
+    for (int i = 0; i < header.e_phnum; i++) {
+        elf_p = (uint8_t *) load_address + header.e_phoff + i * header.e_phentsize;
+
+        uint32_t p_type = read_u32((void **)&elf_p);
+        uint32_t p_offset = read_u32((void **)&elf_p);
+        uint32_t p_vaddr = read_u32((void **)&elf_p);
+        uint32_t p_paddr = read_u32((void **)&elf_p);
+        uint32_t p_filesz = read_u32((void **)&elf_p);
+        uint32_t p_memsz = read_u32((void **)&elf_p);
+        uint32_t p_flags = read_u32((void **)&elf_p);
+        uint32_t p_align = read_u32((void **)&elf_p);
+
+        if (p_type != PT_LOAD) {
+            continue;
+        }
+
+        struct elf_ph ph = {
+            .p_type = p_type,
+            .p_offset = p_offset,
+            .p_vaddr = p_vaddr,
+            .p_paddr = p_paddr,
+            .p_filesz = p_filesz,
+            .p_memsz = p_memsz,
+            .p_flags = p_flags,
+            .p_align = p_align,
+        };
+
+        uint32_t pt_end = ph.p_vaddr + ph.p_memsz;
+        if (pt_end > image_size) {
+            image_size = pt_end;
+        }
+
+        printf("ptype = %x\n", p_type);
+        printf("poffset = %x\n", p_offset);
+        printf("pvaddr = %x\n", p_vaddr);
+        printf("ppaddr = %x\n", p_paddr);
+        printf("pfilesz = %x\n", p_filesz);
+        printf("pmemsz = %x\n", p_memsz);
+        printf("pflags = %x\n", p_flags);
+        printf("palign = %x\n", p_align);
+    }
 
     struct process *app_proc = &procs[2];
     paddr_t *sp = (paddr_t *) &app_proc->stack[sizeof(app_proc->stack)];
@@ -294,11 +293,6 @@ void load_app(void) {
     // TODO: should really call exit() here and the trap handler will
     // call sched().
     // sched();
-
-    for (int i = 0; i < 10; i++) {
-        printf("elf_p points to byte %x\n", *elf_p);
-        elf_p++;
-    }
 
     for (;;) {
         printf("Hella!\n");
