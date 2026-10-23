@@ -264,16 +264,46 @@ void load_app(void) {
         if (pt_end > image_size) {
             image_size = pt_end;
         }
-
-        printf("ptype = %x\n", p_type);
-        printf("poffset = %x\n", p_offset);
-        printf("pvaddr = %x\n", p_vaddr);
-        printf("ppaddr = %x\n", p_paddr);
-        printf("pfilesz = %x\n", p_filesz);
-        printf("pmemsz = %x\n", p_memsz);
-        printf("pflags = %x\n", p_flags);
-        printf("palign = %x\n", p_align);
     }
+
+    printf("image size is %x\n", image_size);
+
+    uint8_t const *base = (uint8_t *) alloc_pages(align_up(image_size, PAGE_SIZE) / PAGE_SIZE);
+
+    for (int i = 0; i < header.e_phnum; i++) {
+        elf_p = (uint8_t *) load_address + header.e_phoff + i * header.e_phentsize;
+
+        uint32_t p_type = read_u32((void **)&elf_p);
+        uint32_t p_offset = read_u32((void **)&elf_p);
+        uint32_t p_vaddr = read_u32((void **)&elf_p);
+        uint32_t p_paddr = read_u32((void **)&elf_p);
+        uint32_t p_filesz = read_u32((void **)&elf_p);
+        uint32_t p_memsz = read_u32((void **)&elf_p);
+        uint32_t p_flags = read_u32((void **)&elf_p);
+        uint32_t p_align = read_u32((void **)&elf_p);
+
+        if (p_type != PT_LOAD) {
+            continue;
+        }
+
+        struct elf_ph ph = {
+            .p_type = p_type,
+            .p_offset = p_offset,
+            .p_vaddr = p_vaddr,
+            .p_paddr = p_paddr,
+            .p_filesz = p_filesz,
+            .p_memsz = p_memsz,
+            .p_flags = p_flags,
+            .p_align = p_align,
+        };
+
+        memcpy(base + p_vaddr, (void *)load_address + p_offset, p_filesz);
+    }
+
+    uint32_t* start = (uint32_t *)(base +  header.e_entry);
+    printf("first byte %x\n", *start);
+    printf("second byte %x\n", *(start + 1));
+    printf("third byte %x\n", *(start + 2));
 
     struct process *app_proc = &procs[2];
     paddr_t *sp = (paddr_t *) &app_proc->stack[sizeof(app_proc->stack)];
@@ -286,7 +316,7 @@ void load_app(void) {
     for (int i = 0; i < SWITCH_FRAME_WORDS - 1; i++) {
         *--sp = 0;
     }
-    *--sp = (paddr_t) load_address + header.e_entry;
+    *--sp = (paddr_t) base + header.e_entry;
 
     app_proc->sp = (paddr_t) sp;
 
