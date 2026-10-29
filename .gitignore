@@ -5,3 +5,4 @@
 !experiments/*.o
 !experiments/*.so
 !experiments/*.elf
+.zed
