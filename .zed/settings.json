@@ -1,9 +1,0 @@
-{
-  "lsp": {
-    "clangd": {
-      "binary": {
-        "path": "/opt/local/libexec/llvm-19/bin/clangd"
-      }
-    }
-  }
-}
