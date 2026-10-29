@@ -300,10 +300,6 @@ void load_app(void) {
         memcpy(base + p_vaddr, (void *)load_address + p_offset, p_filesz);
     }
 
-    uint32_t* start = (uint32_t *)(base +  header.e_entry);
-    printf("first byte %x\n", *start);
-    printf("second byte %x\n", *(start + 1));
-    printf("third byte %x\n", *(start + 2));
 
     struct process *app_proc = &procs[2];
     paddr_t *sp = (paddr_t *) &app_proc->stack[sizeof(app_proc->stack)];
@@ -316,7 +312,8 @@ void load_app(void) {
     for (int i = 0; i < SWITCH_FRAME_WORDS - 1; i++) {
         *--sp = 0;
     }
-    *--sp = (paddr_t) base + header.e_entry;
+    paddr_t entry = (paddr_t)(base +  header.e_entry);
+    *--sp = entry;
 
     app_proc->sp = (paddr_t) sp;
 
